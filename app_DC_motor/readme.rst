@@ -17,6 +17,11 @@ Hardware:
 
 Interface:
 
-Buttons A and B can be used to increase and decrease the speed of the motor(s) respectively
-Button C is used to reverse the direction of the motor
+* Buttons A and B can be used to increase and decrease the speed of the motor(s) respectively
+* Button C is used to reverse the direction of the motor
 
+
+Todo:
+
+* Multiple motor control is sketchy. Code needs to be reworked to allow seperate control of motors and extensibility for more than 2 motors
+* Position control

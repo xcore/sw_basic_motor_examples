@@ -241,8 +241,8 @@ void adc_with_scope(chanend c_adc, clock clk, port out SCLK, buffered out port:3
 			adc_val[1] = adc_val[1] - Ib_calib;
 			adc_val[2] = adc_val[2] - Ic_calib;
 			adc_val[3] = adc_val[3] - Id_calib;
-			xscope_probe_data(0, adc_val[0] );
-			xscope_probe_data(1, adc_val[1] );
+			/*xscope_probe_data(0, adc_val[0] );
+			xscope_probe_data(1, adc_val[1] );*/
 			time += ADC_PERIOD;
 			break;
 		case c_adc :> cmd:
@@ -251,8 +251,6 @@ void adc_with_scope(chanend c_adc, clock clk, port out SCLK, buffered out port:3
 					c_adc <: adc_val[1];
 					c_adc <: adc_val[2];
 					c_adc <: adc_val[3];
-					c_adc <: adc_val[4];
-					c_adc <: adc_val[5];
 				}
 		break;
 		}

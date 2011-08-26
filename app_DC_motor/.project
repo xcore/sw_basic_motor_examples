@@ -2,7 +2,7 @@
 <projectDescription>
 	<name>BrushedDC2</name>
 	<comment></comment>
-	<projects> <project>module_pwm_singlebit_port</project>  
+	<projects> <project>module_pwm_singlebit_port</project>                              
 	</projects>
 	<buildSpec>
 		<buildCommand>
