@@ -117,8 +117,8 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
             case t when timerafter (time) :> void:
                 for (j=0;j<NUM_MOTORS;j++) {
 			        // Calculate the speed with first order filter
-				    speed_current[j] = ( rotations[j] - rotations_old[j]) * ( ONE_SECOND / PID_PERIOD );
-				    speed_actual[j] = ( ( speed_current[j] * 100 ) + ( speed_previous[j] * 9000) ) / 10000;
+				    speed_current[j] = ( rotations[j] - rotations_old[j]) * ( ONE_SECOND / PERIOD );
+				    speed_actual[j] = ( ( speed_current[j] * 1000 ) + ( speed_previous[j] * 9000) ) / 10000;
 				    speed_previous[j] = speed_actual[j];
 				
 				    // Calculate the error  
@@ -136,7 +136,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 				    // Calculate the integrator
 				    if ( ( duty[j] > -250 ) && ( duty[j] < 250 ) )
 				    {
-					    pid_I[j] = pid_I[j] + ( K_I * error[j] / ( ONE_SECOND / PID_PERIOD ) );
+					    pid_I[j] = pid_I[j] + ( K_I * error[j] / ( ONE_SECOND / PERIOD ) );
 				    }
 
 				    // Set output
