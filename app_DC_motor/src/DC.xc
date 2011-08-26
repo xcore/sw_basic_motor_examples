@@ -79,7 +79,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
     //TODO: Store vars in struct to better allow for more motors
     timer t, t_ramp, t_speed;
     unsigned rotor[2] = {0,0};
-    int time, time_pid, time_speed, time_ramp, ts, lastA[2] = {0,0}, current_rpm[2] = {0,0}, rotations_old_speed[NUM_MOTORS], j, cmd;
+    int time, time_speed, time_ramp, ts, lastA[2] = {0,0}, current_rpm[2] = {0,0}, rotations_old_speed[NUM_MOTORS], j, cmd;
     int speed_desired[NUM_MOTORS] = {0,0}, speed_current[NUM_MOTORS]={0,0}, speed_actual[NUM_MOTORS]={0,0}, speed_previous[NUM_MOTORS] = {0,0};
     int rotations_old[NUM_MOTORS] = {0,0}, pid_I[NUM_MOTORS] = {0,0}, pid_P[NUM_MOTORS] = {0,0}, error[NUM_MOTORS];
     int rotations[NUM_MOTORS] = {0,0}, duty[NUM_MOTORS] = {0,0};
@@ -136,7 +136,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 				    // Calculate the integrator
 				    if ( ( duty[j] > -250 ) && ( duty[j] < 250 ) )
 				    {
-					    pid_I[j] = pid_I[j] + ( K_I * error[j] / ( ONE_SECOND / PERIOD ) );
+					    pid_I[j] += error[j]  * ( K_I / ( ONE_SECOND / PERIOD ) );
 				    }
 
 				    // Set output
