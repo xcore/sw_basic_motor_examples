@@ -72,7 +72,7 @@ int iUnlimited = IMAX_ADC;
 
 
 
-int direction = 0;
+int direction = 1;
 int testvar;
 int maxRefI = 255;
 
@@ -87,7 +87,7 @@ void controller(chanend c_control) {
     c_control <: CMD_NUMBER_STEPS;
     c_control <: 1000000;
     c_control <: 100;
-    c_control <: 0;
+    c_control <: 1;
 }
 
 
@@ -98,7 +98,6 @@ void controller(chanend c_control) {
  * 0	255	0	0
  * 0	0	0	255
  *
- * TODO: Direction change
  *
  * Try to achieve 90 degree phase difference between coils:
  */
@@ -118,62 +117,63 @@ void singleStep(chanend c_pwm, chanend c_adc, unsigned int duties[], unsigned in
     while (step != finalStep) {
         select {
             case microstepTimer when timerafter (microPeriod) :> void:
+                printf("direction is %d", direction);
                 //0 - 90 degrees
                 if ((step >= 0) && (step < SINE_SIZE)) {
                 	if (step == 0) {
-                		motor_lo_ports[0] <: 0;
-			            motor_lo_ports[1] <: 1;
-			            motor_lo_ports[2] <: 1;
-			            motor_lo_ports[3] <: 0;
+                		motor_lo_ports[0+(2*direction)] <: 0;
+			            motor_lo_ports[1+(2*direction)] <: 1;
+			            motor_lo_ports[2-(2*direction)] <: 1;
+			            motor_lo_ports[3-(2*direction)] <: 0;
                         //hack to make sure no ports left on at 4 duty cycle
-                        duties[1] = 0;
+                        duties[1+(2*direction)] = 0;
                 	}
-                    duties[0+(direction*3)] = (((((step256[(SINE_SIZE-1)-step]*IMAX_ADC)>>15)*(RESOLUTION-1))/iUnlimited));
-                    duties[3-(direction*3)] = (((((step256[step]*IMAX_ADC))>>15)*(RESOLUTION-1))/iUnlimited);
+                    duties[0+(2*direction)] = (((((step256[(SINE_SIZE-1)-step]*IMAX_ADC)>>15)*(RESOLUTION-1))/iUnlimited));
+                    duties[3-(2*direction)] = (((((step256[step]*IMAX_ADC))>>15)*(RESOLUTION-1))/iUnlimited);
                 }
                 //90-180 degrees
                 if ((step >= SINE_SIZE) && (step < (SINE_SIZE*2))) {
                     if (step == SINE_SIZE) {
-                        motor_lo_ports[0] <: 0;
-                        motor_lo_ports[1] <: 1;
-                        motor_lo_ports[2] <: 0;
-                        motor_lo_ports[3] <: 1;
+                        motor_lo_ports[0+(2*direction)] <: 0;
+                        motor_lo_ports[1+(2*direction)] <: 1;
+                        motor_lo_ports[2-(2*direction)] <: 0;
+                        motor_lo_ports[3-(2*direction)] <: 1;
                         //hack to make sure no ports left on at 4 duty cycle
-                        duties[3] = 0;
+                        duties[3-(2*direction)] = 0;
                     }
-                    duties[2-(direction*2)] = ((((step256[((SINE_SIZE*2)-1)-step]*IMAX_ADC)>>15)*(RESOLUTION-1))/iUnlimited);
-                    duties[0+(direction*2)] = (((((step256[step- SINE_SIZE]*IMAX_ADC)>>15)*(RESOLUTION-1))/iUnlimited));
+                    duties[2-(2*direction)] = ((((step256[((SINE_SIZE*2)-1)-step]*IMAX_ADC)>>15)*(RESOLUTION-1))/iUnlimited);
+                    duties[0+(2*direction)] = (((((step256[step- SINE_SIZE]*IMAX_ADC)>>15)*(RESOLUTION-1))/iUnlimited));
                 }
                 //180-270 degrees
                 if ((step >= (SINE_SIZE*2)) && (step < (SINE_SIZE*3))) {
                     if (step == (SINE_SIZE * 2)) {
-                       	motor_lo_ports[0] <: 1;
-			            motor_lo_ports[1] <: 0;
-			            motor_lo_ports[2] <: 0;
-			            motor_lo_ports[3] <: 1;
+                       	motor_lo_ports[0+(2*direction)] <: 1;
+			            motor_lo_ports[1+(2*direction)] <: 0;
+			            motor_lo_ports[2-(2*direction)] <: 0;
+			            motor_lo_ports[3-(2*direction)] <: 1;
                         //hack to make sure no ports left on at 4 duty cycle
-                        duties[0] = 0;
+                        duties[0+(2*direction)] = 0;
                     }
-                    duties[1+(direction)] = ((((step256[((SINE_SIZE*3)-1)-step]*IMAX_ADC)>>15)*(RESOLUTION-1))/iUnlimited);
-                    duties[2-(direction)] = (((((step256[step- (SINE_SIZE*2)]*IMAX_ADC))>>15)*(RESOLUTION-1))/iUnlimited);
+                    duties[1+(2*direction)] = ((((step256[((SINE_SIZE*3)-1)-step]*IMAX_ADC)>>15)*(RESOLUTION-1))/iUnlimited);
+                    duties[2-(2*direction)] = (((((step256[step- (SINE_SIZE*2)]*IMAX_ADC))>>15)*(RESOLUTION-1))/iUnlimited);
                 }
                 //270-360 degrees
                 if ((step >= (SINE_SIZE*3)) && (step < (SINE_SIZE*4))) {
                     if (step == (SINE_SIZE * 3)) {
-                		motor_lo_ports[0] <: 1;
-                		motor_lo_ports[1] <: 0;
-			            motor_lo_ports[2] <: 1;
-			            motor_lo_ports[3] <: 0;
+                		motor_lo_ports[0+(2*direction)] <: 1;
+                		motor_lo_ports[1+(2*direction)] <: 0;
+			            motor_lo_ports[2-(2*direction)] <: 1;
+			            motor_lo_ports[3-(2*direction)] <: 0;
                         //hack to make sure no ports left on at 4 duty cycle
-                        duties[2] = 0;
+                        duties[2-(2*direction)] = 0;
                     }
-                    duties[3-(direction*2)] = ((((step256[((SINE_SIZE*4)-1)-step]*IMAX_ADC)>>15)*(RESOLUTION-1))/iUnlimited);
-                    duties[1+(direction*2)] = (((((step256[step- (SINE_SIZE*3)]*IMAX_ADC))>>15)*(RESOLUTION-1))/iUnlimited);
+                    duties[3-(2*direction)] = ((((step256[((SINE_SIZE*4)-1)-step]*IMAX_ADC)>>15)*(RESOLUTION-1))/iUnlimited);
+                    duties[1+(2*direction)] = (((((step256[step- (SINE_SIZE*3)]*IMAX_ADC))>>15)*(RESOLUTION-1))/iUnlimited);
                 }
                 //only on last step
                 if (step == SINE_SIZE*4) {
-                	duties[3] = ((((step256[(SINE_SIZE*4) - step]*IMAX_ADC)>>15)*(RESOLUTION-1))/iUnlimited);
-                	duties[1] = (((((step256[step- (SINE_SIZE*3) -1]*IMAX_ADC))>>15)*(RESOLUTION-1))/iUnlimited);
+                	duties[3-(2*direction)] = ((((step256[(SINE_SIZE*4) - step]*IMAX_ADC)>>15)*(RESOLUTION-1))/iUnlimited);
+                	duties[1+(2*direction)] = (((((step256[step- (SINE_SIZE*3) -1]*IMAX_ADC))>>15)*(RESOLUTION-1))/iUnlimited);
                 }
 
             #ifdef CHOP_CURRENT
