@@ -35,7 +35,6 @@
 #define START_SPEED
 
 //PID controller parameters
-#define 	PID_PERIOD	100000   	// 1ms = 1kHz
 #define 	ONE_SECOND	100000000 	// 1000ms
 #define 	K_P        	5000
 #define 	K_I        	10000
@@ -78,7 +77,7 @@ void controller (chanend c_control) {
 void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
     
     //TODO: Store vars in struct to better allow for more motors
-    timer t, t_pid, t_ramp, t_speed;
+    timer t, t_ramp, t_speed;
     unsigned rotor[2] = {0,0};
     int time, time_pid, time_speed, time_ramp, ts, lastA[2] = {0,0}, current_rpm[2] = {0,0}, rotations_old_speed[NUM_MOTORS], j, cmd;
     int speed_desired[NUM_MOTORS] = {0,0}, speed_current[NUM_MOTORS]={0,0}, speed_actual[NUM_MOTORS]={0,0}, speed_previous[NUM_MOTORS] = {0,0};
@@ -100,11 +99,9 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 
     //Initialise timers
     t :> time;
-    t_pid :> time_pid;
     t_ramp :> time_ramp;
     t_speed :> time_speed;
     time += PERIOD;
-    time_pid += PID_PERIOD;
     time_speed += ONE_SECOND;
 
     xscope_config_io(XSCOPE_IO_BASIC);
