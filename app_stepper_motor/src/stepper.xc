@@ -48,7 +48,7 @@ on stdcore[MOTOR_CORE]: clock adc_clk = XS1_CLKBLK_2;
 // STEP_SIZE defines the number of microsteps to be used:
 // SINE_SIZE / STEP_SIZE gives the number of microsteps
 // {256,128,64,32,16,8,4,2 or 1} are valid values
-#define STEP_SIZE 16
+#define STEP_SIZE 1
 
 #define SINE_SIZE 256
 
@@ -72,7 +72,7 @@ int iUnlimited = IMAX_ADC;
 
 
 
-int direction = 1;
+int direction = FORWARD;
 int testvar;
 int maxRefI = 255;
 
@@ -80,14 +80,14 @@ timer microstepTimer;
 int microstepTime;
 
 void controller(chanend c_control) {
-    /*c_control <: CMD_SET_MOTOR_SPEED;
-    c_control <: 1000000;   //Step Period 
-    c_control <: 0;         //Direction*/
+    c_control <: CMD_SET_MOTOR_SPEED;
+    c_control <: 100000000;   //Step Period 
+    c_control <: FORWARD;         //Direction
 
-    c_control <: CMD_NUMBER_STEPS;
+    /*c_control <: CMD_NUMBER_STEPS;
     c_control <: 1000000;
     c_control <: 100;
-    c_control <: 1;
+    c_control <: REVERSE;*/
 }
 
 
@@ -100,6 +100,7 @@ void controller(chanend c_control) {
  *
  *
  * Try to achieve 90 degree phase difference between coils:
+ * Direction control works by effectively swapping the coils in software
  */
  
  
@@ -108,8 +109,6 @@ void singleStep(chanend c_pwm, chanend c_adc, unsigned int duties[], unsigned in
     int adc_values[4] = {0,0,0,0};
     int finalStep;
 
-
-    //Go through for each value checking
     if (step == SINE_SIZE*4)
         finalStep = SINE_SIZE;
     else 
@@ -117,7 +116,6 @@ void singleStep(chanend c_pwm, chanend c_adc, unsigned int duties[], unsigned in
     while (step != finalStep) {
         select {
             case microstepTimer when timerafter (microPeriod) :> void:
-                printf("direction is %d", direction);
                 //0 - 90 degrees
                 if ((step >= 0) && (step < SINE_SIZE)) {
                 	if (step == 0) {

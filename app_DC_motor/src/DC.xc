@@ -67,7 +67,7 @@ on stdcore[INTERFACE_CORE]: in port p_btns[4] = {PORT_BUTTON_A, PORT_BUTTON_B, P
 
 
 void controller (chanend c_control) {
-    ramp_parameters rampParam = {0,50,0,10000000,1};
+    ramp_parameters rampParam = {0,10,0,10000000,1};
     
     c_control <: CMD_RAMP;
     c_control <: rampParam;
@@ -107,7 +107,6 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
     xscope_config_io(XSCOPE_IO_BASIC);
 
 	//Turn on low sides of M1 phase A and M2 phase A
-	//TODO: Initial direction control
     for (j = 0; j < NUM_MOTORS; j++)    
         motor_DC_lo[((2*j)+1)] <: 1;
     
