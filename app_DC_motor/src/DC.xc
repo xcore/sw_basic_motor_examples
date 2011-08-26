@@ -118,6 +118,42 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
         select {
             //Loop for updating PWM duty cycle
             case t when timerafter (time) :> void:
+                for (j=0;j<NUM_MOTORS;j++) {
+			        // Calculate the speed with first order filter
+				    speed_current[j] = ( rotations[j] - rotations_old[j]) * ( ONE_SECOND / PID_PERIOD );
+				    speed_actual[j] = ( ( speed_current[j] * 100 ) + ( speed_previous[j] * 9000) ) / 10000;
+				    speed_previous[j] = speed_actual[j];
+				
+				    // Calculate the error  
+				    error[j] = speed_desired[j] - speed_actual[j];
+
+				    rotations_old[j] = rotations[j];
+				
+				    // Stop the motors if the desired speed is 0 and reset the integrator
+				    if ( ( speed_desired[j] == 0 ) && ( speed_actual[j] > -200 ) && ( speed_actual[j] < 200 ) )
+				    {
+					    error[j] = 0;
+					    pid_I[j] = 0;
+				    }
+											
+				    // Calculate the integrator
+				    if ( ( duty[j] > -250 ) && ( duty[j] < 250 ) )
+				    {
+					    pid_I[j] = pid_I[j] + ( K_I * error[j] / ( ONE_SECOND / PID_PERIOD ) );
+				    }
+
+				    // Set output
+				    pid_P[j] = K_P * error[j];
+				    duty[j] = (pid_P[j] + pid_I[j]) >> 12;
+			        
+				    // Limit the motor speed to 100% (out of 256)
+				    if ( duty[j] < -255 )	{ duty[j] = -255; }
+				    else if ( duty[j] > 255 )	{ duty[j] = 255; }
+				    
+				    //If we're going backwards then invert the duty cycle
+				    if (direction)  { duty[j] = -duty[j]; }
+                }
+
                 for (j=0; j<NUM_MOTORS; j++) {
 				    //If the duty cycle has gone negative, reverse current direction
                     if (duty[j] < 0) {
@@ -204,47 +240,6 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 				//set up for next loop                
 				lastA[1] = (rotor[1] >> 2);
                 break;
-
-            case t_pid when timerafter(time_pid) :> void:
-                for (j=0;j<NUM_MOTORS;j++) {
-			        // Calculate the speed with first order filter
-				    speed_current[j] = ( rotations[j] - rotations_old[j]) * ( ONE_SECOND / PID_PERIOD );
-				    speed_actual[j] = ( ( speed_current[j] * 100 ) + ( speed_previous[j] * 9000) ) / 10000;
-				    speed_previous[j] = speed_actual[j];
-				
-				    // Calculate the error  
-				    error[j] = speed_desired[j] - speed_actual[j];
-
-				    rotations_old[j] = rotations[j];
-				
-				    // Stop the motors if the desired speed is 0 and reset the integrator
-				    if ( ( speed_desired[j] == 0 ) && ( speed_actual[j] > -200 ) && ( speed_actual[j] < 200 ) )
-				    {
-					    error[j] = 0;
-					    pid_I[j] = 0;
-				    }
-											
-				    // Calculate the integrator
-				    if ( ( duty[j] > -250 ) && ( duty[j] < 250 ) )
-				    {
-					    pid_I[j] = pid_I[j] + ( K_I * error[j] / ( ONE_SECOND / PID_PERIOD ) );
-				    }
-
-				    // Set output
-				    pid_P[j] = K_P * error[j];
-				    duty[j] = (pid_P[j] + pid_I[j]) >> 12;
-			        
-				    // Limit the motor speed to 100% (out of 256)
-				    if ( duty[j] < -255 )	{ duty[j] = -255; }
-				    else if ( duty[j] > 255 )	{ duty[j] = 255; }
-				    
-				    //If we're going backwards then invert the duty cycle
-				    if (direction)  { duty[j] = -duty[j]; }
-
-				    // Setup the next PID loop
-				    time_pid += PID_PERIOD;
-                }
-				break;
 
             //calculate RPM for display
             case t_speed when timerafter(time_speed) :> void:
