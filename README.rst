@@ -25,7 +25,6 @@ Key Features
 To Do
 =====
 
-* Closed loop PI current control
 
 Firmware Overview
 =================
