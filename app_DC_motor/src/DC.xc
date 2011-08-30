@@ -61,18 +61,24 @@ on stdcore[MOTOR_CORE]: buffered in port:32 ADC_DATA = PORT_ADC_MISO;
 on stdcore[MOTOR_CORE]: in port ADC_SYNC_PORT = XS1_PORT_16A;
 on stdcore[MOTOR_CORE]: clock adc_clk = XS1_CLKBLK_2;
 
-/* core with LCD and BUTTON interfaces */
+// core with LCD and BUTTON interfaces
 on stdcore[INTERFACE_CORE]: lcd_interface_t lcd_ports = { PORT_DS_SCLK, PORT_DS_MOSI, PORT_DS_CS_N, PORT_CORE1_SHARED };
 on stdcore[INTERFACE_CORE]: in port p_btns[4] = {PORT_BUTTON_A, PORT_BUTTON_B, PORT_BUTTON_C, PORT_BUTTON_D};
 
 
 
-
+//Example of control
 void controller (chanend c_control) {
-    ramp_parameters rampParam = {40,50,0,10000000,1};
+    ramp_parameters rampParam = {40,50,0,1000,1};
+    ramp_parameters rampParam2 = {40,90,0,1000,1};
     
     c_control <: CMD_RAMP;
+    c_control <: 0;             //Which motor to ramp
     c_control <: rampParam;
+    
+    c_control <: CMD_RAMP;
+    c_control <: 1;
+    c_control <: rampParam2;
 
 }
 
@@ -87,8 +93,8 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
     int rotations[NUM_MOTORS] = {0,0}, duty[NUM_MOTORS] = {0,0};
     unsigned int duties[4] = {0,0,0,0};
     
-    int doRamp = 0, direction = 0, setSpeed = 0;
-    ramp_parameters rampParam = {0,0,0,10000000,0};
+    int doRamp[NUM_MOTORS] = {0,0}, direction[NUM_MOTORS] = {0,0}, whichMotor, rampPeriodCount[NUM_MOTORS] = {0,0};
+    ramp_parameters rampParam[NUM_MOTORS];
     
     //calculate once as optimisation
     int period_per_second = ONE_SECOND / PERIOD;
@@ -152,10 +158,22 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 				    else if ( duty[j] > 255 )	{ duty[j] = 255; }
 				    
 				    //If we're going backwards then invert the duty cycle
-				    if (direction)  { duty[j] = -duty[j]; }
+				    if (direction[j])  { duty[j] = -duty[j]; }
                 }
-
+                
+                
                 for (j=0; j<NUM_MOTORS; j++) {
+                    //deal with ramping
+                    if (doRamp[j]) {
+                        if (rampPeriodCount[j] == rampParam[j].rampPeriod) {
+                            speed_desired[j] += rampParam[j].acceleration;
+                            rampPeriodCount[j] = 0;
+                        }
+                        //If we've reached the target speed, stop ramping
+                        //TODO: What if targetSpeed is not a multiple of acceleration
+                        if (speed_desired[j] == rampParam[j].targetSpeed)
+                            doRamp[j] = 0;
+                    }
 				    //If the duty cycle has gone negative, reverse current direction
                     if (duty[j] < 0) {
                     //TODO: Don't call the pwm routine twice
@@ -165,6 +183,10 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
                         motor_DC_lo[0 + (2*j)] <: 1;
                         duties[1+(2*j)] = -duty[j];
                     }
+                    
+                   
+                    
+                    
 				//Otherwise set up for normal operation
                     else {
                         duties[0 + (2*j)] = 0;
@@ -173,7 +195,9 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
                         motor_DC_lo[1+(2*j)] <: 1; 
                         duties[0+(2*j)] = duty[j];
                     }
+                    rampPeriodCount[j]++; 
                 }
+
                 pwmSingleBitPortSetDutyCycle(c, duties, (NUM_MOTORS*2));
                 time += PERIOD;
                 break;
@@ -182,37 +206,23 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
             case c_control :> cmd:
                 //Received a command to ramp
                 if (cmd == CMD_RAMP) {
-                    c_control :> rampParam;
-                    doRamp = 1;
-                    speed_desired[0] = rampParam.startSpeed;
-                    speed_desired[1] = rampParam.startSpeed;
-                    direction = rampParam.direction;
+                    c_control :> whichMotor;
+                    c_control :> rampParam[whichMotor];
+                    
+                    doRamp[whichMotor] = 1;
+                    speed_desired[whichMotor] = rampParam[whichMotor].startSpeed;
+                    direction[whichMotor] = rampParam[whichMotor].direction;
                 }
                 else if (cmd == CMD_SET_MOTOR_SPEED) {
-                    c_control :> setSpeed;
-                    c_control :> direction;
-                    speed_desired[0] = setSpeed;
-                    speed_desired[1] = setSpeed;
+                    c_control :> whichMotor;
+                    c_control :> speed_desired[whichMotor];
+                    c_control :> direction[whichMotor];
                 }
                 else if (cmd == CMD_GET_MOTOR_SPEED) {
                     c_control <: current_rpm[0];
                 }
                 /*else if (cmd == CMD_POSITION)
                     c_control <: targetPosition*/
-                break;
-
-			//If ramping up the speed then increment desired speed every ramp period
-            
-            case t_ramp when timerafter(time_ramp) :> void:
-                if (doRamp) {
-                    speed_desired[0] += rampParam.acceleration;
-                    speed_desired[1] += rampParam.acceleration;
-                    
-                    //If we've reached the target speed, stop ramping
-                    if (speed_desired[0] == rampParam.targetSpeed)
-                        doRamp = 0;
-                }
-                time_ramp += rampParam.rampPeriod;
                 break;
             
 
@@ -271,7 +281,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 			    }
 			    else if (cmd == CMD_SET_SPEED2)
 			    {
-				    c_speed[1] :> speed_desired[1];
+				    c_speed[1] :> speed_desired[0];
 			    }
 			    break;
         }

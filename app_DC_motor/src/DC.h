@@ -12,7 +12,7 @@ typedef struct ramp_parameters {
     int startSpeed;
     int targetSpeed;
     int direction;
-    int rampPeriod;       
+    int rampPeriod;       //Multiple of period for main loop i.e. if main period = 10ns and rampPeriod = 10, actual period for ramp is 100ns
     int acceleration;     //This is the speed increase per ramp_period, If ramping down, set this negative
 } ramp_parameters;
 
