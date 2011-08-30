@@ -27,18 +27,20 @@
 
 //Defines for PWM library
 //Period for PWM should be (Resolution * 20 * Timestep) in ns?
-#define 	RESOLUTION	256
-#define 	TIMESTEP	2
-#define 	PERIOD		100000
-#define     NUM_MOTORS  2
+#define 	RESOLUTION	    256
+#define 	TIMESTEP	    2
+
+#define 	PERIOD		    100000
+#define     NUM_MOTORS      2
 
 #define START_SPEED
 
 //PID controller parameters
-#define 	ONE_SECOND	100000000 	// 1000ms
-#define 	K_P        	5000
-#define 	K_I        	10000
+#define 	ONE_SECOND	    100000000 	// 1000ms
+#define 	K_P        	    5000
+#define 	K_I        	    10000
 
+#define     PERIOD_PER_SEC  
 //PWM clock and Watchdog port
 on stdcore[MOTOR_CORE] : clock pwm_clk = XS1_CLKBLK_1;
 on stdcore[MOTOR_CORE] : out port i2c_wd = PORT_I2C_WD_SHARED;
@@ -67,7 +69,7 @@ on stdcore[INTERFACE_CORE]: in port p_btns[4] = {PORT_BUTTON_A, PORT_BUTTON_B, P
 
 
 void controller (chanend c_control) {
-    ramp_parameters rampParam = {0,10,0,10000000,1};
+    ramp_parameters rampParam = {40,50,0,10000000,1};
     
     c_control <: CMD_RAMP;
     c_control <: rampParam;
@@ -87,6 +89,9 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
     
     int doRamp = 0, direction = 0, setSpeed = 0;
     ramp_parameters rampParam = {0,0,0,10000000,0};
+    
+    //calculate once as optimisation
+    int period_per_second = ONE_SECOND / PERIOD;
 
     //Wait 0.5s to ensure watchdog works correctly
     t :> ts;
@@ -116,7 +121,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
             case t when timerafter (time) :> void:
                 for (j=0;j<NUM_MOTORS;j++) {
 			        // Calculate the speed with first order filter
-				    speed_current[j] = ( rotations[j] - rotations_old[j]) * ( ONE_SECOND / PERIOD );
+				    speed_current[j] = ( rotations[j] - rotations_old[j]) * ( period_per_second );
 				    speed_actual[j] = ( ( speed_current[j] * 1000 ) + ( speed_previous[j] * 9000) ) / 10000;
 				    speed_previous[j] = speed_actual[j];
 				
@@ -135,7 +140,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 				    // Calculate the integrator
 				    if ( ( duty[j] > -250 ) && ( duty[j] < 250 ) )
 				    {
-					    pid_I[j] += error[j]  * ( K_I / ( ONE_SECOND / PERIOD ) );
+					    pid_I[j] += error[j]  * ( K_I / ( period_per_second ) );
 				    }
 
 				    // Set output
