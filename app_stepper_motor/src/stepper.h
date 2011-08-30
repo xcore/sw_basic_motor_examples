@@ -5,6 +5,7 @@
 
 #define CMD_NUMBER_STEPS 0
 #define CMD_SET_MOTOR_SPEED 1
+#define CMD_MOTOR_OFF 2
 
 #define FORWARD 0
 #define REVERSE 1

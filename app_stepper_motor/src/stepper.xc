@@ -80,9 +80,10 @@ timer microstepTimer;
 int microstepTime;
 
 void controller(chanend c_control) {
+    
     c_control <: CMD_SET_MOTOR_SPEED;
     c_control <: 100000000;   //Step Period 
-    c_control <: FORWARD;         //Direction
+    c_control <: FORWARD;     //Direction
 
     /*c_control <: CMD_NUMBER_STEPS;
     c_control <: 1000000;
@@ -251,6 +252,19 @@ void motor(chanend c_pwm, chanend c_adc, chanend c_wd, chanend c_control) {
                     c_control :> stepPeriod;
                     c_control :> noSteps;
                     c_control :> direction;
+                }
+                if (cmd == CMD_MOTOR_OFF) {
+                    //reset step count so we don't startup in the middle of a step
+                    step = 0;
+                    
+                    //stop controller making any more steps
+                    doSteps = 0;
+                    doSpeed = 0;
+                    
+                    //disable all outputs
+                    for (int i = 0; i < 4; i++) {
+                        motor_lo_ports[i] <: 0;
+                    }
                 }
                 break;
                     
