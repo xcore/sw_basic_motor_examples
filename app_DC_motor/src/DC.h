@@ -7,6 +7,7 @@
 #define CMD_SET_MOTOR_SPEED 1
 #define CMD_GET_MOTOR_SPEED 2
 #define CMD_POSITION 3
+#define DC_MOTOR
 
 typedef struct ramp_parameters {
     int startSpeed;

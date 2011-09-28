@@ -13,7 +13,7 @@
 #include "watchdog.h"
 #include "config.h"
 #include "pwm_singlebit_port.h"
-#include "adc.h"
+#include "adc_7265.h"
 #include "tables.h"
 #include "stepper.h"
 
@@ -21,29 +21,28 @@
 on stdcore[MOTOR_CORE] : clock pwm_clk = XS1_CLKBLK_1;
 
 //Watchdog port
-on stdcore[MOTOR_CORE]: out port i2c_wd = PORT_I2C_WD_SHARED;
+on stdcore[MOTOR_CORE]: out port i2c_wd = PORT_WATCHDOG;
 
 //Buffered port for high and low sides of four half bridges
 on stdcore[MOTOR_CORE] : out buffered port:32 motor_ports[8] = { PORT_M1_HI_A, PORT_M2_HI_A, PORT_M1_HI_B, PORT_M1_HI_C, PORT_M1_LO_A, PORT_M2_LO_A, PORT_M1_LO_B, PORT_M1_LO_C};
 
 //Ports for ADC
 on stdcore[MOTOR_CORE]: out port ADC_SCLK = PORT_ADC_CLK;
-on stdcore[MOTOR_CORE]: buffered out port:32 ADC_CNVST = PORT_ADC_CONV;
-on stdcore[MOTOR_CORE]: buffered in port:32 ADC_DATA = PORT_ADC_MISO;
-on stdcore[MOTOR_CORE]: in port ADC_SYNC_PORT = XS1_PORT_16A;
+on stdcore[MOTOR_CORE]: port ADC_CNVST = PORT_ADC_CONV;
+on stdcore[MOTOR_CORE]: buffered in port:32 ADC_DATA_A = PORT_ADC_MISOA;
+on stdcore[MOTOR_CORE]: buffered in port:32 ADC_DATA_B = PORT_ADC_MISOB;
+on stdcore[MOTOR_CORE]: out port ADC_MUX = PORT_ADC_MUX;
+on stdcore[MOTOR_CORE]: in port ADC_SYNC_PORT1 = XS1_PORT_16A;
+on stdcore[MOTOR_CORE]: in port ADC_SYNC_PORT2 = XS1_PORT_16B;
 on stdcore[MOTOR_CORE]: clock adc_clk = XS1_CLKBLK_2;
 
 #define RESOLUTION 256              //Resolution of PWM, normally 256                                          
-#define TIMESTEP 12                 //Determines frequency of PWM
+#define TIMESTEP 18                 //Determines frequency of PWM
 #define PERIOD 100000               //Initial step period
-
-#define ADC_PERIOD 20000
 
 #define PI_ANTIWINDUP 500           //Anti wind-up gain
 #define PIGAIN1 1000                
 #define PIGAIN2 50
-
-#define USE_XSCOPE
 
 // STEP_SIZE defines the number of microsteps to be used:
 // COS_SIZE / STEP_SIZE gives the number of microsteps
@@ -96,9 +95,16 @@ void controller(chanend c_control) {
     int titime;
     ti :> titime;
     
-    c_control <: CMD_SET_MOTOR_SPEED;
-    c_control <: 1000000;   //Step Period 
-    c_control <: FORWARD;     //Direction
+    //min @ 24v 100000 @ step_size 16 @ adc 20k
+    /*c_control <: CMD_SET_MOTOR_SPEED;
+    c_control <: 5000000;   //Step Period 
+    c_control <: FORWARD;     //Direction*/
+    
+    ti when timerafter(titime+100000000) :> void;
+    c_control <: CMD_NUMBER_STEPS;
+    c_control <: 50000000;
+    c_control <: 100;
+    c_control <: REVERSE;
     
     
 }
@@ -106,6 +112,7 @@ void controller(chanend c_control) {
  
 //Can be called for both windings, just pass different sum and error vars.
 //Should return a voltage output
+//where PIGAIN is ((MOTOR_L+(0.001/PWM_FQCY)*MOTOR_R/2)*ADC_MAX_RANGE*32768/DC_BUS_RESISTOR /ADC_VOLTAGE)
 
 //TODO Sort out previous outputs
 int applyPI(int referenceI,int actualI, int &sum, int &lastError, int &lastOutput) {
@@ -231,7 +238,10 @@ void setWindingPWM(int PIOutput[], enum decay decayMode[],  chanend c_pwm) {
         duty[2] = 0;
         duty[3] = 0;
     }
-
+    
+       
+    
+    //printf("sending duty %d, %d, %d, %d\n", duty[0],duty[1],duty[2],duty[3]);
     pwmSingleBitPortSetDutyCycle(c_pwm, duty, 8);
 
     
@@ -248,8 +258,6 @@ void getWindingADC ( chanend c_adc) {
         c_adc :> adc[1];
         c_adc :> adc[2];
         c_adc :> adc[3];
-        c_adc :> temp;
-        c_adc :> temp;
     }
     
     //make sure we only use the positive part
@@ -440,7 +448,7 @@ void singleStep(chanend c_pwm, unsigned int &step, unsigned microPeriod, chanend
                 setWindingPWM(PIOutput, decayMode, c_pwm);
 
                 
-                adc_time += ADC_PERIOD;
+                adc_time += 20000;
                 break;
          }
     }
@@ -485,7 +493,6 @@ void motor(chanend c_pwm, chanend c_control, chanend c_wd, chanend c_adc) {
     microStepPeriod = stepPeriod / ((COS_SIZE) / STEP_SIZE);
     
     while (1) {
-        #pragma ordered
         select {
             case c_control :> cmd:            
                 if (cmd == CMD_SET_MOTOR_SPEED) {
@@ -581,8 +588,8 @@ int main(void) {
         pwmSingleBitPortTrigger(c_adc_trig, c_pwm, pwm_clk, motor_ports, 8, RESOLUTION, TIMESTEP, 1);
         }
         
-		on stdcore[MOTOR_CORE] : adc_ltc1408_triggered( c_adc, adc_clk, ADC_SCLK, ADC_CNVST, ADC_DATA, c_adc_trig);
-    	on stdcore[MOTOR_CORE] : do_wd(c_wd, i2c_wd);
+		on stdcore[MOTOR_CORE] : adc_7265_4val_triggered( c_adc, c_adc_trig, adc_clk, ADC_SCLK, ADC_CNVST, ADC_DATA_A, ADC_DATA_B, ADC_MUX );
+    	on stdcore[INTERFACE_CORE] : do_wd(c_wd, i2c_wd);
 	}
 	return 0;
 }

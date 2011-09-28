@@ -7,9 +7,8 @@
 #define CONFIG_H_
 
 // Define where everything is
-#define PROCESSING_CORE 0
-#define INTERFACE_CORE 1
-#define MOTOR_CORE 2
+#define INTERFACE_CORE 0
+#define MOTOR_CORE 1
 
 //Define ADC stuff
 #define ADC_TRIG_TOKEN 1
