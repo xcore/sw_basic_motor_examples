@@ -81,7 +81,7 @@ void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lc
 		        /* Calculate the strings here */
 		        /* Now update the display */
 				lcd_draw_text_row( "  XMOS DC Motor Demo\n", 0, port_val, p );
-				sprintf(my_string, "  Set Speed: %04d RPM\n", set_speed );
+				sprintf(my_string, "  Set Speed: %04d\n", set_speed );
 				lcd_draw_text_row( my_string, 1, port_val, p );
 
 				sprintf(my_string, "  Speed1 : 	 %04d RPM\n", speed1 );
@@ -149,7 +149,7 @@ void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lc
 					timer_2 :> ts;
 					timer_2 when timerafter(ts + _30_Msec) :> ts;
 				}
-				set_speed  =0;
+				set_speed = 0;
 		        /* Update the speed control loop */
 				c_lcd1 <: CMD_SET_SPEED;
 				c_lcd1 <: set_speed;

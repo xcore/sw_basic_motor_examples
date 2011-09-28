@@ -9,7 +9,7 @@
 #include <syscall.h>
 #include <xs1.h>
 #include <stdio.h>
-#include <xscope.h>
+//#include <xscope.h>
 #include "watchdog.h"
 #include "config.h"
 #include "pwm_singlebit_port.h"
@@ -70,15 +70,25 @@ on stdcore[INTERFACE_CORE]: in port p_btns[4] = {PORT_BUTTON_A, PORT_BUTTON_B, P
 //Example of control
 void controller (chanend c_control) {
     ramp_parameters rampParam = {40,50,0,1000,1};
-    ramp_parameters rampParam2 = {40,90,0,1000,1};
+    ramp_parameters rampParam2 = {40,160,1,500,1};
     
-    c_control <: CMD_RAMP;
+    /*c_control <: CMD_RAMP;
     c_control <: 0;             //Which motor to ramp
     c_control <: rampParam;
-    
-    c_control <: CMD_RAMP;
+    */
+    /*c_control <: CMD_RAMP;
     c_control <: 1;
-    c_control <: rampParam2;
+    c_control <: rampParam2;*/
+    
+    c_control <: CMD_SET_MOTOR_SPEED;
+    c_control <: 0;
+    c_control <: 50;
+    c_control <: 0;
+    
+    c_control <: CMD_SET_MOTOR_SPEED;
+    c_control <: 1;
+    c_control <: 160;
+    c_control <: 1;
 
 }
 
@@ -114,8 +124,10 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
     t_speed :> time_speed;
     time += PERIOD;
     time_speed += ONE_SECOND;
-
-    xscope_config_io(XSCOPE_IO_BASIC);
+    /*xscope_register(1,
+    XSCOPE_CONTINUOUS, "Reference 1", XSCOPE_UINT, "Value");
+    
+    xscope_config_io(XSCOPE_IO_BASIC);*/
 
 	//Turn on low sides of M1 phase A and M2 phase A
     for (j = 0; j < NUM_MOTORS; j++)    
@@ -158,9 +170,11 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 				    else if ( duty[j] > 255 )	{ duty[j] = 255; }
 				    
 				    //If we're going backwards then invert the duty cycle
-				    if (direction[j])  { duty[j] = -duty[j]; }
-                }
-                
+				    if (direction[j])  { 
+				        duty[j] = -duty[j]; 
+				    }
+                }      
+                //xscope_probe_data(0, duty[0]);
                 
                 for (j=0; j<NUM_MOTORS; j++) {
                     //deal with ramping
@@ -233,7 +247,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
                     if ((rotor[0]>>1)<3)
                         rotations[0]++;
                     else
-                        rotations[0]--;
+                        rotations[0]++;//--;
                 }
 				//set up for next loop                
 				lastA[0] = (rotor[0] >> 2);
@@ -246,7 +260,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
                     if ((rotor[1]>>1)<3)
                         rotations[1]++;
                     else
-                        rotations[1]--;
+                        rotations[1]++;//--;
                 }
 				//set up for next loop                
 				lastA[1] = (rotor[1] >> 2);
@@ -271,6 +285,11 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 			    {
 
 				    c_speed[0] :> speed_desired[0];
+			    }
+			    else if (cmd == CMD_DIR)
+			    {
+			        direction[0] = !direction[0];
+			        direction[1] = !direction[1];
 			    }
 			    break;
             //Process a command received from the display
@@ -300,6 +319,7 @@ int main(void) {
         on stdcore[INTERFACE_CORE] : controller(c_control);
     	on stdcore[MOTOR_CORE] : motors( c_wd, c_speed, c, c_control);
         on stdcore[INTERFACE_CORE] : display_shared_io_motor( c_speed[0], c_speed[1], lcd_ports, p_btns);
+        
         on stdcore[MOTOR_CORE] : pwmSingleBitPort(c, pwm_clk, motor_DC_hi, (NUM_MOTORS*2), RESOLUTION, TIMESTEP,1);
 	}
 	return 0;

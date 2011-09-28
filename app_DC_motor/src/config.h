@@ -17,7 +17,7 @@
 #define ADC_PERIOD 200000
 
 #define INITIAL_SET_SPEED 50
-#define PWM_INC_DEC_VAL 1
+#define PWM_INC_DEC_VAL 10
 #define MAX_RPM 250
 #define MIN_RPM 1
 

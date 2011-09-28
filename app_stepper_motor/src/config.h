@@ -14,6 +14,12 @@
 
 //Define ADC stuff
 #define ADC_TRIG_TOKEN 1
-#define ADC_CALIB_POINTS 1024
+#define ADC_CALIB_POINTS 512
 #define ADC_PERIOD 20000
+
+#define CHOPPING_DECREMENT 10;
+
+
 #endif /* CONFIG_H_ */
+
+

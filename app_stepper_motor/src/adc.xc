@@ -6,6 +6,7 @@
 
 #include <xs1.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <print.h>
 #include <xscope.h>
 #include "config.h"
@@ -38,12 +39,12 @@ void do_6adc_calibration( chanend c_adc )
 		Ie_calib += e;
 		If_calib += f;
 	}
-	    Ia_calib = (Ia_calib >> 6);
-		Ib_calib = (Ib_calib >> 6);
-		Ic_calib = (Ic_calib >> 6);
-	    Id_calib = (Id_calib >> 6);
-		Ie_calib = (Ie_calib >> 6);
-		If_calib = (If_calib >> 6);
+	    Ia_calib = (Ia_calib >> 10);
+		Ib_calib = (Ib_calib >> 10);
+		Ic_calib = (Ic_calib >> 10);
+	    Id_calib = (Id_calib >> 10);
+		Ie_calib = (Ie_calib >> 10);
+		If_calib = (If_calib >> 10);
 }
 
 
@@ -70,7 +71,6 @@ void do_6adc_calibration( chanend c_adc )
 
 	/* request and then receive adc data */
 	c_adc <: 6;
-
 	slave
 	{
 		c_adc :> a;
@@ -136,18 +136,33 @@ static void adc_get_data_ltc1408_singleshot( int adc_val[], unsigned offset, buf
 
 }
 
-/*
-void adc_ltc1408_triggered( chanend c_adc, clock clk, port out SCLK, buffered out port:32 CNVST, in buffered port:32 DATA, chanend c_trig, chanend ?c_logging0, chanend ?c_logging1, chanend ?c_logging2)
+
+void adc_ltc1408_triggered( chanend c_adc, clock clk, port out SCLK, buffered out port:32 CNVST, in buffered port:32 DATA, chanend c_trig)
 {
-	int adc_val[6];
+	int adc_val[6] = {0,0,0,0,0,0};
 	int cmd;
+	int time;
 	unsigned char ct;
 
 	timer t;
 	unsigned ts;
 
 	configure_adc_ports_ltc1408(clk, SCLK, CNVST, DATA);
-
+    //Calibrate the ADC
+    for (int i = 0; i < ADC_CALIB_POINTS; i++)
+    {
+        //get ADC reading
+        adc_get_data_ltc1408_singleshot( adc_val, 0, CNVST, DATA, clk );
+        Ia_calib += adc_val[0];
+        Ib_calib += adc_val[1];
+        Ic_calib += adc_val[2];
+        Id_calib += adc_val[3];
+    }
+        //If number of calibration points is changed then this needs changing
+        Ia_calib = (Ia_calib >> 9);
+        Ib_calib = (Ib_calib >> 9);
+        Ic_calib = (Ic_calib >> 9);
+        Id_calib = (Id_calib >> 9);
 	while (1)
 	{
 		select
@@ -156,8 +171,8 @@ void adc_ltc1408_triggered( chanend c_adc, clock clk, port out SCLK, buffered ou
 		case inct_byref(c_trig, ct):
 			if (ct == ADC_TRIG_TOKEN)
 			{
-				t :> ts;
-				t when timerafter(ts + 1740) :> ts;
+			    t :> ts;
+                t when timerafter(ts + 700) :> ts;
 				adc_get_data_ltc1408_singleshot( adc_val, 0, CNVST, DATA, clk );
 			}
 			break;
@@ -180,10 +195,10 @@ void adc_ltc1408_triggered( chanend c_adc, clock clk, port out SCLK, buffered ou
 				break;
 			case 6:
 				master {
-					c_adc <: adc_val[0];
-					c_adc <: adc_val[1];
-					c_adc <: adc_val[2];
-					c_adc <: adc_val[3];
+					c_adc <: adc_val[0] - Ia_calib;
+					c_adc <: adc_val[1] - Ib_calib;
+					c_adc <: adc_val[2] - Ic_calib;
+					c_adc <: adc_val[3] - Id_calib;
 					c_adc <: adc_val[4];
 					c_adc <: adc_val[5];
 				}
@@ -193,7 +208,7 @@ void adc_ltc1408_triggered( chanend c_adc, clock clk, port out SCLK, buffered ou
 		}
 
 	}
-}*/
+}
 
 /*
  * Need to use get 16 calibrated with c_adc to get values
@@ -224,34 +239,37 @@ void adc_with_scope(chanend c_adc, clock clk, port out SCLK, buffered out port:3
 		Ic_calib += adc_val[2];
 		Id_calib += adc_val[3];
 	}
-        //If number of calibration points is changed then this needs changing
-	    Ia_calib = (Ia_calib >> 10);
-		Ib_calib = (Ib_calib >> 10);
-		Ic_calib = (Ic_calib >> 10);
-	    Id_calib = (Id_calib >> 10);
+	
+    //If number of calibration points is changed then this needs changing
+    Ia_calib = (Ia_calib >> 10);
+	Ib_calib = (Ib_calib >> 10);
+	Ic_calib = (Ic_calib >> 10);
+    Id_calib = (Id_calib >> 10);
 	time += ADC_PERIOD;
+	
 	while (1)
 	{
 		select
 		{
-
+        /*
 		case t when timerafter (time) :> time:
 			adc_get_data_ltc1408_singleshot( adc_val, 0, CNVST, DATA, clk );
 			adc_val[0] = adc_val[0] - Ia_calib;
 			adc_val[1] = adc_val[1] - Ib_calib;
 			adc_val[2] = adc_val[2] - Ic_calib;
 			adc_val[3] = adc_val[3] - Id_calib;
-			/*xscope_probe_data(0, adc_val[0] );
-			xscope_probe_data(1, adc_val[1] );*/
+			//xscope_probe_data(0, adc_val[0] );
+			//xscope_probe_data(1, adc_val[1] );
 			time += ADC_PERIOD;
-			break;
+			break; */
 		case c_adc :> cmd:
-				master {
-					c_adc <: adc_val[0];
-					c_adc <: adc_val[1];
-					c_adc <: adc_val[2];
-					c_adc <: adc_val[3];
-				}
+            adc_get_data_ltc1408_singleshot( adc_val, 0, CNVST, DATA, clk );
+		    master {
+			    c_adc <: adc_val[0]- Ia_calib;
+			    c_adc <: adc_val[1]- Ib_calib;
+			    c_adc <: adc_val[2]- Ic_calib;
+			    c_adc <: adc_val[3]- Id_calib;
+		    }
 		break;
 		}
 
