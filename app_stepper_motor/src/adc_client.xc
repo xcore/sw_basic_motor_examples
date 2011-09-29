@@ -20,7 +20,7 @@
  *
  **/                                   
 #include <xs1.h>
-#include "dsc_config.h"
+#include "config.h"
 
 void do_adc_calibration( chanend c_adc )
 {

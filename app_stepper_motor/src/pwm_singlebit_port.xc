@@ -180,7 +180,7 @@ void pwmSingleBitPortTrigger(
         case t when timerafter (time) :> void:
             if (numTicks == resolution)
                 {
-                outct(c_adc_trig, 1);
+                outct(c_adc_trig, XS1_CT_END);
                 numTicks = 0;
                 }
             

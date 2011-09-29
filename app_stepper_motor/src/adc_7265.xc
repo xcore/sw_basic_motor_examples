@@ -8,32 +8,45 @@
 #include <xs1.h>
 #include <platform.h>
 #include <xclib.h>
-//#include <adc_common.h>
-#include "config.h"
+#include <adc_common.h>
 #include <adc_7265.h>
 
-//#define ADC_FILTER_7265
+#ifdef USE_XSCOPE
+#include <xscope.h>
+#endif
 
+
+#define ADC_FILTER_7265
+
+// This parameter needs to be tuned to move the ADC trigger point into the centre of the 'OFF' period.
+// The 'test_pwm' application can be run in the simulator to tune the parameter.  Use the following
+// command line:
+//    xsim --vcd-tracing "-core stdcore[1] -ports" bin\Release\test_pwm.xe > trace.vcd
+//
+// Then open the 'Signals' and 'Waves' panes in the XDE, load the VCD file and look at the traces
+// named 'PORT_M1_LO_A', 'PORT_M1_LO_B', 'PORT_M1_LO_C', and 'PORT_ADC_CONV'.  The ADC conversion
+// trigger should go high in the centre of the low periods of all of the motor control ports. This
+// occurs periodically, but an example can be found at around 94.8us into the simulaton.
+#define ADC_TRIGGER_DELAY 2020
 
 #pragma xta command "analyze loop adc_7265_main_loop"
 #pragma xta command "set required - 40 us"
 
-// This array determines the mapping from trigger channel to which analogue input to select in the ADC mux
-static int trigger_channel_to_adc_mux[2] = { 2, 0 };
-
 // These are the calibration values
-static unsigned calibration[3][2];
+static unsigned calibration[6];
 
 // Mode to say if we are currently calibrating the ADC
-static int calibration_mode[2];
+static int calibration_mode;
 
 // Accumultor for the calibration average
-static int calibration_acc[3][2];
+static int calibration_acc[6];
+
 
 static void configure_adc_ports_7265(clock clk, out port SCLK, port CNVST, in buffered port:32 DATA_A, in buffered port:32 DATA_B, out port MUX)
 {
 	// configure the clock to be 16MHz
-    configure_clock_rate_at_least(clk, 16, 1);
+    //configure_clock_rate_at_least(clk, 16, 1);
+    configure_clock_rate_at_most(clk, 16, 1);
     configure_port_clock_output(SCLK, clk);
 
     // ports require postive strobes, but the ADC needs a negative strobe. use the port pin invert function
@@ -75,11 +88,16 @@ static void adc_get_data_7265( int adc_val[], unsigned channel, port CNVST, in b
 	val1 = bitrev(val1);
 	val3 = bitrev(val3);
 
-	val1 = val1 >> 2;
-	val3 = val3 >> 2;
+	val1 = val1 >> 4;
+	val3 = val3 >> 4;
 
 	val1 = 0x00000FFF & val1;
 	val3 = 0x00000FFF & val3;
+
+#ifdef USE_XSCOPE
+	xscope_probe_data(0, val1);
+	xscope_probe_data(1, val3);
+#endif
 
 #ifdef ADC_FILTER_7265
 	adc_val[0] = (adc_val[0] >> 1) + (val1 >> 1);
@@ -90,10 +108,19 @@ static void adc_get_data_7265( int adc_val[], unsigned channel, port CNVST, in b
 #endif
 
 }
+
+
+//When MUX = 0, M1A and M1B
+//When MUX = 2, M2A and M2B
+//When MUX = 4, M2C and M1C
+
 #pragma unsafe arrays
-void adc_7265_4val_triggered( chanend c_adc, chanend c_trig, clock clk, out port SCLK, port CNVST, in buffered port:32 DATA_A, in buffered port:32 DATA_B, port out MUX )
+void adc_7265_6val_triggered( chanend c_adc, chanend c_trig, clock clk, out port SCLK, port CNVST, in buffered port:32 DATA_A, in buffered port:32 DATA_B, port out MUX )
 {
-	int adc_val[3][2];
+	int adc_val0[2] = {0,0};
+	int adc_val2[2] = {0,0};
+	int adc_val4[2] = {0,0};
+	
 	int cmd;
 	unsigned char ct;
 
@@ -104,30 +131,7 @@ void adc_7265_4val_triggered( chanend c_adc, chanend c_trig, clock clk, out port
 
 	configure_adc_ports_7265( clk, SCLK, CNVST, DATA_A, DATA_B, MUX );
 
-	for (unsigned int c=0; c<3; ++c) {
-		adc_val[c][0] = 0;
-		adc_val[c][1] = 0;
-	}
-	for (int i=0; i < 512; i++) {
-		adc_get_data_7265( adc_val[0], 0, CNVST, DATA_A, DATA_B, MUX );
-		adc_get_data_7265( adc_val[1], 2, CNVST, DATA_A, DATA_B, MUX );
-		adc_get_data_7265( adc_val[2], 4, CNVST, DATA_A, DATA_B, MUX );
-		
-	    calibration_acc[0][0] += adc_val[0][0];
-	    calibration_acc[0][1] += adc_val[0][1];
-	    calibration_acc[1][0] += adc_val[1][0];
-	    calibration_acc[1][1] += adc_val[1][1];
-	    calibration_acc[2][0] += adc_val[2][0];
-        calibration_acc[2][1] += adc_val[2][1]; 
-	}
 	
-    calibration[0][0] = calibration_acc[0][0] / 512;
-    calibration[0][1] = calibration_acc[0][1] / 512;
-    calibration[1][0] = calibration_acc[1][0] / 512;
-    calibration[1][1] = calibration_acc[1][1] / 512;
-    calibration[2][0] = calibration_acc[2][0] / 512;
-    calibration[2][1] = calibration_acc[2][1] / 512;
-    
 	while (1)
 	{
 #pragma xta endpoint "adc_7265_main_loop"
@@ -138,24 +142,55 @@ void adc_7265_4val_triggered( chanend c_adc, chanend c_trig, clock clk, out port
 			if (ct == ADC_TRIG_TOKEN)
 			{
 				t :> ts;
-				t when timerafter(ts + 700) :> ts;
-				adc_get_data_7265( adc_val[0], 0, CNVST, DATA_A, DATA_B, MUX );
-				adc_get_data_7265( adc_val[1], 2, CNVST, DATA_A, DATA_B, MUX );
-				adc_get_data_7265( adc_val[2], 4, CNVST, DATA_A, DATA_B, MUX );
+				t when timerafter(ts + ADC_TRIGGER_DELAY) :> ts;
+				adc_get_data_7265( adc_val0, 0, CNVST, DATA_A, DATA_B, MUX );
+				adc_get_data_7265( adc_val2, 2, CNVST, DATA_A, DATA_B, MUX );
+				adc_get_data_7265( adc_val4, 4, CNVST, DATA_A, DATA_B, MUX );
+				if (calibration_mode > 0) {
+					calibration_mode--;
+					calibration_acc[0] += adc_val0[0];
+					calibration_acc[1] += adc_val0[1];
+					calibration_acc[2] += adc_val2[0];
+					calibration_acc[3] += adc_val2[1];
+					calibration_acc[4] += adc_val4[0];
+					calibration_acc[5] += adc_val4[1];																						
+					if (calibration_mode == 0) {
+						calibration[0] = calibration_acc[0] >> 9;
+						calibration[1] = calibration_acc[1] >> 9;
+						calibration[2] = calibration_acc[2] >> 9;
+						calibration[3] = calibration_acc[3] >> 9;
+						calibration[4] = calibration_acc[4] >> 9;
+						calibration[5] = calibration_acc[5] >> 9;
+					}
+				}
 			}
 			break;
 		case c_adc :> cmd:
-			master {
-				unsigned a = adc_val[0][0] - calibration[0][0];
-				unsigned b = adc_val[0][1] - calibration[0][1];
-				unsigned c = adc_val[2][1] - calibration[2][1];
-				unsigned d = adc_val[1][0] - calibration[1][0];
-				c_adc <: a;
-				c_adc <: b;
-				c_adc <: c;
-				c_adc <: d;
+			if (cmd == 1) {
+				calibration_mode = 512;
+				calibration_acc[0]=0;
+				calibration_acc[1]=0;
+				calibration_acc[2]=0;
+				calibration_acc[3]=0;	
+				calibration_acc[4]=0;
+				calibration_acc[5]=0;								
+			} else {
+				master {
+					unsigned a = adc_val0[0] - calibration[0];
+					unsigned b = adc_val0[1] - calibration[1];
+					unsigned c = adc_val2[0] - calibration[2];
+					unsigned d = adc_val2[1] - calibration[3];
+					unsigned e = adc_val4[0] - calibration[4];
+					unsigned f = adc_val4[1] - calibration[5];
+					c_adc <: a;
+					c_adc <: b;
+					c_adc <: c;
+					c_adc <: d;
+					c_adc <: e;
+					c_adc <: f;
+				}
 			}
-		    break;
+			break;
 		}
 	}
 }

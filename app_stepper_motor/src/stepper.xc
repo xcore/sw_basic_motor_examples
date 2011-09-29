@@ -16,12 +16,13 @@
 #include "adc_7265.h"
 #include "tables.h"
 #include "stepper.h"
+#include "adc_client.h"
 
 //Clock for PWM
 on stdcore[MOTOR_CORE] : clock pwm_clk = XS1_CLKBLK_1;
 
 //Watchdog port
-on stdcore[MOTOR_CORE]: out port i2c_wd = PORT_WATCHDOG;
+on stdcore[MOTOR_CORE] : out port i2c_wd = PORT_WATCHDOG;
 
 //Buffered port for high and low sides of four half bridges
 on stdcore[MOTOR_CORE] : out buffered port:32 motor_ports[8] = { PORT_M1_HI_A, PORT_M2_HI_A, PORT_M1_HI_B, PORT_M1_HI_C, PORT_M1_LO_A, PORT_M2_LO_A, PORT_M1_LO_B, PORT_M1_LO_C};
@@ -37,12 +38,16 @@ on stdcore[MOTOR_CORE]: in port ADC_SYNC_PORT2 = XS1_PORT_16B;
 on stdcore[MOTOR_CORE]: clock adc_clk = XS1_CLKBLK_2;
 
 #define RESOLUTION 256              //Resolution of PWM, normally 256                                          
-#define TIMESTEP 18                 //Determines frequency of PWM
+#define TIMESTEP 20                 //Determines frequency of PWM
 #define PERIOD 100000               //Initial step period
+
+#define ADC_PERIOD 20000
 
 #define PI_ANTIWINDUP 500           //Anti wind-up gain
 #define PIGAIN1 1000                
 #define PIGAIN2 50
+
+#define USE_XSCOPE
 
 // STEP_SIZE defines the number of microsteps to be used:
 // COS_SIZE / STEP_SIZE gives the number of microsteps
@@ -90,17 +95,11 @@ int microstepTime, adc_time;
 
 
 void controller(chanend c_control) {
-    
-    timer ti;
-    int titime;
-    ti :> titime;
-    
-    //min @ 24v 100000 @ step_size 16 @ adc 20k
+
     /*c_control <: CMD_SET_MOTOR_SPEED;
     c_control <: 5000000;   //Step Period 
     c_control <: FORWARD;     //Direction*/
-    
-    ti when timerafter(titime+100000000) :> void;
+
     c_control <: CMD_NUMBER_STEPS;
     c_control <: 50000000;
     c_control <: 100;
@@ -112,7 +111,6 @@ void controller(chanend c_control) {
  
 //Can be called for both windings, just pass different sum and error vars.
 //Should return a voltage output
-//where PIGAIN is ((MOTOR_L+(0.001/PWM_FQCY)*MOTOR_R/2)*ADC_MAX_RANGE*32768/DC_BUS_RESISTOR /ADC_VOLTAGE)
 
 //TODO Sort out previous outputs
 int applyPI(int referenceI,int actualI, int &sum, int &lastError, int &lastOutput) {
@@ -239,9 +237,10 @@ void setWindingPWM(int PIOutput[], enum decay decayMode[],  chanend c_pwm) {
         duty[3] = 0;
     }
     
-       
+    for (int i = 0; i < 8; i++) {
+        xscope_probe_data(i+6, duty[i]);
+    }
     
-    //printf("sending duty %d, %d, %d, %d\n", duty[0],duty[1],duty[2],duty[3]);
     pwmSingleBitPortSetDutyCycle(c_pwm, duty, 8);
 
     
@@ -256,8 +255,10 @@ void getWindingADC ( chanend c_adc) {
     slave {
         c_adc :> adc[0]; 
         c_adc :> adc[1];
-        c_adc :> adc[2];
         c_adc :> adc[3];
+        c_adc :> temp;
+        c_adc :> temp;
+        c_adc :> adc[2];
     }
     
     //make sure we only use the positive part
@@ -448,7 +449,7 @@ void singleStep(chanend c_pwm, unsigned int &step, unsigned microPeriod, chanend
                 setWindingPWM(PIOutput, decayMode, c_pwm);
 
                 
-                adc_time += 20000;
+                adc_time += ADC_PERIOD;
                 break;
          }
     }
@@ -467,15 +468,21 @@ void motor(chanend c_pwm, chanend c_control, chanend c_wd, chanend c_adc) {
     
     #ifdef USE_XSCOPE
     xscope_config_io(XSCOPE_IO_BASIC);
-    xscope_register(8,
+    xscope_register(14,
     XSCOPE_CONTINUOUS, "ADCReference 1", XSCOPE_UINT, "Value",
     XSCOPE_CONTINUOUS, "ADCReference 2", XSCOPE_UINT, "Value",
     XSCOPE_CONTINUOUS, "ADC Winding 1", XSCOPE_UINT, "Value",
     XSCOPE_CONTINUOUS, "ADC Winding 2", XSCOPE_UINT, "Value",
     XSCOPE_CONTINUOUS, "PI Output1", XSCOPE_UINT, "Value",
     XSCOPE_CONTINUOUS, "PI Output2", XSCOPE_UINT, "Value",
-    XSCOPE_CONTINUOUS, "lastRef0", XSCOPE_UINT, "Value",
-    XSCOPE_CONTINUOUS, "lastRef1", XSCOPE_UINT, "Value");
+    XSCOPE_CONTINUOUS, "duty0", XSCOPE_UINT, "Value",
+    XSCOPE_CONTINUOUS, "duty1", XSCOPE_UINT, "Value",
+    XSCOPE_CONTINUOUS, "duty2", XSCOPE_UINT, "Value",
+    XSCOPE_CONTINUOUS, "duty3", XSCOPE_UINT, "Value",
+    XSCOPE_CONTINUOUS, "duty4", XSCOPE_UINT, "Value",
+    XSCOPE_CONTINUOUS, "duty5", XSCOPE_UINT, "Value",
+    XSCOPE_CONTINUOUS, "duty6", XSCOPE_UINT, "Value",
+    XSCOPE_CONTINUOUS, "duty7", XSCOPE_UINT, "Value");
     #endif
     
     microstepTimer :> microstepTime;
@@ -493,6 +500,7 @@ void motor(chanend c_pwm, chanend c_control, chanend c_wd, chanend c_adc) {
     microStepPeriod = stepPeriod / ((COS_SIZE) / STEP_SIZE);
     
     while (1) {
+#pragma ordered
         select {
             case c_control :> cmd:            
                 if (cmd == CMD_SET_MOTOR_SPEED) {
@@ -588,7 +596,7 @@ int main(void) {
         pwmSingleBitPortTrigger(c_adc_trig, c_pwm, pwm_clk, motor_ports, 8, RESOLUTION, TIMESTEP, 1);
         }
         
-		on stdcore[MOTOR_CORE] : adc_7265_4val_triggered( c_adc, c_adc_trig, adc_clk, ADC_SCLK, ADC_CNVST, ADC_DATA_A, ADC_DATA_B, ADC_MUX );
+		on stdcore[MOTOR_CORE] : adc_7265_6val_triggered( c_adc, c_adc_trig, adc_clk, ADC_SCLK, ADC_CNVST, ADC_DATA_A, ADC_DATA_B, ADC_MUX );
     	on stdcore[INTERFACE_CORE] : do_wd(c_wd, i2c_wd);
 	}
 	return 0;

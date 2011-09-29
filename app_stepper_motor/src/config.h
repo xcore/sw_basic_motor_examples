@@ -12,7 +12,7 @@
 #define MOTOR_CORE 1
 
 //Define ADC stuff
-#define ADC_TRIG_TOKEN 1
+
 #define ADC_CALIB_POINTS 512
 #define ADC_PERIOD 20000
 #define ADC_NUMBER_OF_TRIGGERS NUMBER_OF_MOTORS
