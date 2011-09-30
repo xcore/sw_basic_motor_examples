@@ -21,14 +21,11 @@ Key Features
 * Stepper Motor:
     * Microstepping
     * Current monitoring with ADC
+    * Chopping (open loop / closed loop)
+    * Decay Modes - Alternating or fixed
 
 To Do
 =====
-
-
-Firmware Overview
-=================
-
 
 Known Issues
 ============
