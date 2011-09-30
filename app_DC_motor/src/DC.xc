@@ -83,7 +83,7 @@ void DCcontroller (chanend c_control) {
 
 }
 
-void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
+void motors( chanend c_wd, chanend c_speed[], chanend c_pwm, chanend c_control) {
     
     //TODO: Store vars in struct to better allow for more motors
     timer t, t_ramp, t_speed;
@@ -187,7 +187,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 				    //If the duty cycle has gone negative, reverse current direction
                     if (duty[j] < 0) {
                         duties[0 + (2*j)] = 0;
-                        pwmSingleBitPortSetDutyCycle(c, duties, (NUMBER_OF_MOTORS*2));
+                        pwmSingleBitPortSetDutyCycle(c_pwm, duties, (NUMBER_OF_MOTORS*2));
                         motor_DC_lo[1 + (2*j)] <: 0;
                         motor_DC_lo[0 + (2*j)] <: 1;
                         duties[1+(2*j)] = -duty[j];
@@ -195,7 +195,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 				//Otherwise set up for normal operation
                     else {
                         duties[0 + (2*j)] = 0;
-                        pwmSingleBitPortSetDutyCycle(c, duties, (NUMBER_OF_MOTORS*2));
+                        pwmSingleBitPortSetDutyCycle(c_pwm, duties, (NUMBER_OF_MOTORS*2));
                         motor_DC_lo[0+(2*j)] <: 0;
                         motor_DC_lo[1+(2*j)] <: 1; 
                         duties[0+(2*j)] = duty[j];
@@ -203,7 +203,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
                     rampPeriodCount[j]++; 
                 }
 
-                pwmSingleBitPortSetDutyCycle(c, duties, (NUMBER_OF_MOTORS*2));
+                pwmSingleBitPortSetDutyCycle(c_pwm, duties, (NUMBER_OF_MOTORS*2));
                 time += PERIOD;
                 break;
 
@@ -322,8 +322,8 @@ int main(void) {
 
 	par {
     	on stdcore[INTERFACE_CORE] : do_wd(c_wd, i2c_wd) ;
-        on stdcore[INTERFACE_CORE] : controller(c_control);
-    	on stdcore[MOTOR_CORE] : motors( c_wd, c_speed, c, c_control);
+        on stdcore[INTERFACE_CORE] : DCcontroller(c_control);
+    	on stdcore[MOTOR_CORE] : motors( c_wd, c_speed, c_pwm, c_control);
         on stdcore[INTERFACE_CORE] : display_shared_io_manager( c_speed, lcd_ports, p_btns, p_leds);
         
         on stdcore[MOTOR_CORE] : pwmSingleBitPort(c_pwm, pwm_clk, motor_DC_hi, (NUMBER_OF_MOTORS*2), RESOLUTION, TIMESTEP,1);
