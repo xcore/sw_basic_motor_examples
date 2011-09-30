@@ -86,7 +86,7 @@ int windingCurrent[2] = {0,0}, adc_last[4] = {0,0,0,0}, refCurrentADC[2];
 
 unsigned duty[8] = {0,0,0,0,0,0,0,0};
 
-enum decay {slow, fast};
+
 enum decay decayMode[2];
 
 int PISum0 = 0, PISum1 = 0, PILastError0 = 0, PILastError1 = 0, PIOutput[2] = {0,0};
@@ -246,11 +246,8 @@ void setWindingPWM(int PIOutput[], enum decay decayMode[],  chanend c_pwm) {
     pwmSingleBitPortSetDutyCycle(c_pwm, duty, 8);
 
 }
-/*
- *
- *
- *
- */
+
+
 void getWindingADC ( chanend c_adc) {
     int adc[4] = {0,0,0,0};
     int temp;

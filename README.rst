@@ -21,6 +21,7 @@ Key Features
 * Stepper Motor:
     * Microstepping
     * Current monitoring with ADC
+    * Chopping (open loop / closed loop)
 
 To Do
 =====
@@ -38,7 +39,6 @@ Known Issues
 Required Repositories
 ================
 
-* sc_pwm git\@github.com:xcore/sc_pwm.git
 * xcommon git\@github.com:xcore/xcommon.git
 
 Required Hardware

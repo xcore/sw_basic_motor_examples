@@ -10,6 +10,7 @@
 #define FORWARD 0
 #define REVERSE 1
 
+enum decay {slow, fast};
 
 /** \brief Send commands to the motor control thread
  *

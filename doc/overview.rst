@@ -19,8 +19,9 @@ Features
         + uses a PI controller to adjust current
         
 * DC Motor
-    - Control of 2 DC motors
-    - PI loop for speed control
+    - Support for multiple motors
+    - Basic speed control using PWM library
+    - PID control using quadrature encoder for constant speed
     
 Thread diagrams for both applications are shown below:   
 
