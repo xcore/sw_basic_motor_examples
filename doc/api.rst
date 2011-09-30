@@ -138,7 +138,7 @@ Client functions
 Server functions
 ++++++++++++++++
 
-.. doxygenfunction:: adc_7265_triggered
+.. doxygenfunction:: adc_7265_6val_triggered
 
 
 Watchdog Timer

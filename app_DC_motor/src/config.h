@@ -20,4 +20,17 @@
 #define MAX_RPM 250
 #define MIN_RPM 1
 
+//Defines for PWM library
+//Period for PWM should be (Resolution * 20 * Timestep) in ns?
+#define 	RESOLUTION	    256
+#define 	TIMESTEP	    10
+
+#define 	PERIOD		    100000
+#define     NUMBER_OF_MOTORS 2
+
+//PID controller parameters
+#define 	ONE_SECOND	    100000000 	// 1000ms
+#define 	K_P        	    5000
+#define 	K_I        	    10000
+
 #endif /* CONFIG_H_ */

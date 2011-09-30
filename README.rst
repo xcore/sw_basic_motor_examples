@@ -22,19 +22,17 @@ Key Features
     * Microstepping
     * Current monitoring with ADC
     * Chopping (open loop / closed loop)
+    * Decay Modes - Alternating or fixed
 
 To Do
 =====
 
-
-Firmware Overview
-=================
-
+* Breakout the singleStep function to provide individual microstep positioning
 
 Known Issues
 ============
 
-* 
+* Currently does not work on the XP-MC-CTRL-L2 board
 
 Required Repositories
 ================
@@ -44,7 +42,7 @@ Required Repositories
 Required Hardware
 =================
 
-* XP-DSC-BLDC development kit
+* XP-MC-CTRL-L2 development kit
 * Bipolar stepper motor
 * DC motor with quadrature encoder
 
