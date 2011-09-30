@@ -38,7 +38,7 @@ on stdcore[MOTOR_CORE]: in port ADC_SYNC_PORT2 = XS1_PORT_16B;
 on stdcore[MOTOR_CORE]: clock adc_clk = XS1_CLKBLK_2;
 
 #define RESOLUTION 256              //Resolution of PWM, normally 256                                          
-#define TIMESTEP 20                 //Determines frequency of PWM
+#define TIMESTEP 12                //Determines frequency of PWM
 #define PERIOD 100000               //Initial step period
 
 #define ADC_PERIOD 20000
@@ -59,23 +59,24 @@ on stdcore[MOTOR_CORE]: clock adc_clk = XS1_CLKBLK_2;
 //slow = fixed decay (always slow decay)
 //fast = alternating decay (slow during rising current, fast during falling)
 //fast decay provides higher speeds with slightly noisier operation
-#define DECAY_MODE slow
+#define DECAY_MODE fast
 
-#define V_REF 12
+#define V_REF 24
 #define R_WINDING 44
 
 //Only used if OPEN_LOOP_CHOPPING or CLOSED_LOOP_CHOPPING defined
-#define IMAX 200      //max phase current in milliamps
+#define IMAX 600      //max phase current in milliamps
 
 //Open loop limits current according to theoretical current from R and V
 //Closed loop takes ADC reading and limits current above IMAX
 //#define OPEN_LOOP_CHOPPING 1
 //#define CLOSED_LOOP_CHOPPING 1
 //Maximum limited current in terms of ADC
-#define IMAX_ADC ((8192*IMAX)/6250)
+//since 14bit input and 1.5A range
+#define IMAX_ADC ((16384*IMAX)/1500)
 
 
-unsigned iScaled = (((8192*V_REF*1000)/(6250*R_WINDING)));
+unsigned iScaled = (((16384*V_REF*1000)/(1500*R_WINDING)));
 int iMaxADC = IMAX_ADC;
 int choppedDutyCycle = ((IMAX << 13 * 255) / (((V_REF << 13) / (R_WINDING))*1000));
 int temp1;
@@ -85,7 +86,7 @@ int windingCurrent[2] = {0,0}, adc_last[4] = {0,0,0,0}, refCurrentADC[2];
 
 unsigned duty[8] = {0,0,0,0,0,0,0,0};
 
-enum decay {fast, slow};
+enum decay {slow, fast};
 enum decay decayMode[2];
 
 int PISum0 = 0, PISum1 = 0, PILastError0 = 0, PILastError1 = 0, PIOutput[2] = {0,0};
@@ -96,16 +97,15 @@ int microstepTime, adc_time;
 
 void controller(chanend c_control) {
 
-    /*c_control <: CMD_SET_MOTOR_SPEED;
+    c_control <: CMD_SET_MOTOR_SPEED;
     c_control <: 5000000;   //Step Period 
-    c_control <: FORWARD;     //Direction*/
+    c_control <: FORWARD;     //Direction
 
-    c_control <: CMD_NUMBER_STEPS;
+    /*c_control <: CMD_NUMBER_STEPS;
     c_control <: 50000000;
-    c_control <: 100;
-    c_control <: REVERSE;
-    
-    
+    c_control <: 500;
+    c_control <: FORWARD;*/
+   
 }
 
  
@@ -241,17 +241,22 @@ void setWindingPWM(int PIOutput[], enum decay decayMode[],  chanend c_pwm) {
         xscope_probe_data(i+6, duty[i]);
     }
     
+    //printf("duty2 is %d and duty3 is %d", duty[2], duty[3]);
+    
     pwmSingleBitPortSetDutyCycle(c_pwm, duty, 8);
 
-    
 }
-
+/*
+ *
+ *
+ *
+ */
 void getWindingADC ( chanend c_adc) {
     int adc[4] = {0,0,0,0};
     int temp;
     
-    //Get the adc values
-    c_adc <: 6;
+
+    c_adc <: 0;
     slave {
         c_adc :> adc[0]; 
         c_adc :> adc[1];
@@ -259,6 +264,10 @@ void getWindingADC ( chanend c_adc) {
         c_adc :> temp;
         c_adc :> temp;
         c_adc :> adc[2];
+    }
+    
+    for (int i = 0; i < 4; i++) {
+        adc[i] = adc[i] << 2;
     }
     
     //make sure we only use the positive part
@@ -486,12 +495,18 @@ void motor(chanend c_pwm, chanend c_control, chanend c_wd, chanend c_adc) {
     #endif
     
     microstepTimer :> microstepTime;
+    
+    	/* allow the WD to get going */
+	if (!isnull(c_wd)) {
+		c_wd <: WD_CMD_START;
+	}
+	
     //delay to make sure the ADC is calibrated before starting output and watchdog is enabled
     t :> time;
     t when timerafter (time+100000000) :> time;
     
-    c_wd <: WD_CMD_START;
-    
+
+    do_adc_calibration(c_adc);
     time += PERIOD;
     adc_timer :> adc_time;
     adc_time +=100000;
@@ -586,8 +601,8 @@ int main(void) {
 	    on stdcore[INTERFACE_CORE] : controller(c_control);
     	on stdcore[MOTOR_CORE] : motor(c_pwm, c_control, c_wd, c_adc);
     	
-    	//to stop flooding the ADC while it's calibrating, delay
-    	//should be a better way
+    	//to stop flooding the ADC while it's calibrating, delay starting
+    	//should be a better way to do this
 		on stdcore[MOTOR_CORE] : {
         timer delayt;
         int delaytime;

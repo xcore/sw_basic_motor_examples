@@ -12,11 +12,10 @@
 
 /** \brief Implements the AD7265 triggered ADC service
  *
- *  This implements the AD hardware interface to the 7265 ADC device.  It has two ports to allow reading two
- *  simultaneous current readings for a single motor.
+ *  This implements the AD hardware interface to the 7265 ADC device.  It reads 6 ADC values in successive pairs
  *
- *  \param c_adc the array of ADC server control channels
- *  \param c_trig the array of channels to recieve triggers from the PWM modules
+ *  \param c_adc the ADC server control channel
+ *  \param c_trig the channel to recieve triggers from the PWM module
  *  \param clk an XCORE clock to provide clocking to the ADC
  *  \param SCLK the external clock pin on the ADC
  *  \param CNVST the convert strobe on the ADC

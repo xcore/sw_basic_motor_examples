@@ -29,7 +29,7 @@ void do_adc_calibration( chanend c_adc )
 
 {int, int, int} get_adc_vals_calibrated_int16( chanend c_adc )
 {
-	int a, b, c;
+	int a, b, c, d, e, f;
 
 	/* request and then receive adc data */
 	c_adc <: 0;
@@ -39,12 +39,18 @@ void do_adc_calibration( chanend c_adc )
 		c_adc :> a;
 		c_adc :> b;
 		c_adc :> c;
+		c_adc :> d;
+		c_adc :> e;
+		c_adc :> f;
 	}
 
 	/* convert to 14 bit from 12 bit */
 	a = a << 2;
 	b = b << 2;
 	c = c << 2;
+	d = d << 2;
+	e = e << 2;
+	f = f << 2;
 
 	return {a, b, c};
 }

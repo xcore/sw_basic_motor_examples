@@ -27,7 +27,8 @@
 // named 'PORT_M1_LO_A', 'PORT_M1_LO_B', 'PORT_M1_LO_C', and 'PORT_ADC_CONV'.  The ADC conversion
 // trigger should go high in the centre of the low periods of all of the motor control ports. This
 // occurs periodically, but an example can be found at around 94.8us into the simulaton.
-#define ADC_TRIGGER_DELAY 2020
+#define ADC_TRIGGER_DELAY 700
+
 
 #pragma xta command "analyze loop adc_7265_main_loop"
 #pragma xta command "set required - 40 us"

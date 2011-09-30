@@ -59,7 +59,7 @@ on stdcore[INTERFACE_CORE]: out port p_leds = PORT_LEDS;
 
 
 //Example of control
-void controller (chanend c_control) {
+void DCcontroller (chanend c_control) {
     ramp_parameters rampParam = {40,50,0,1000,1};
     ramp_parameters rampParam2 = {40,160,1,500,1};
     
@@ -69,7 +69,7 @@ void controller (chanend c_control) {
     
     /*c_control <: CMD_RAMP;
     c_control <: 1;
-    c_control <: rampParam2;*/    
+    c_control <: rampParam2;*/
     
     c_control <: CMD_SET_MOTOR_SPEED;
     c_control <: 0;
@@ -317,16 +317,16 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 
 int main(void) {
 
-    chan c_wd, c_speed[2], c, c_control;
+    chan c_wd, c_speed[2], c_pwm, c_control;
 
 
 	par {
-    	//on stdcore[INTERFACE_CORE] : do_wd(c_wd, i2c_wd) ;
+    	on stdcore[INTERFACE_CORE] : do_wd(c_wd, i2c_wd) ;
         on stdcore[INTERFACE_CORE] : controller(c_control);
-    	//on stdcore[MOTOR_CORE] : motors( c_wd, c_speed, c, c_control);
-        //on stdcore[INTERFACE_CORE] : display_shared_io_manager( c_speed, lcd_ports, p_btns, p_leds);
+    	on stdcore[MOTOR_CORE] : motors( c_wd, c_speed, c, c_control);
+        on stdcore[INTERFACE_CORE] : display_shared_io_manager( c_speed, lcd_ports, p_btns, p_leds);
         
-        //on stdcore[MOTOR_CORE] : pwmSingleBitPort(c, pwm_clk, motor_DC_hi, (NUMBER_OF_MOTORS*2), RESOLUTION, TIMESTEP,1);
+        on stdcore[MOTOR_CORE] : pwmSingleBitPort(c_pwm, pwm_clk, motor_DC_hi, (NUMBER_OF_MOTORS*2), RESOLUTION, TIMESTEP,1);
 	}
 	return 0;
 }
