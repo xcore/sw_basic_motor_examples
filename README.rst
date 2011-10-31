@@ -5,7 +5,7 @@ Basic Motor Control Examples
 
 :Status:  Work in Progress
 
-:Maintainer:  bitdivision
+:Maintainer:  davidn@xmos.com
 
 :Description:  Examples for basic control of stepper and DC motors
 

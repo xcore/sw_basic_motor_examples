@@ -203,11 +203,9 @@ void adc_with_scope(chanend c_adc, clock clk, port out SCLK, buffered out port:3
 {
 	int adc_val[6];
 	int cmd;
-	unsigned char ct;
 
 	timer t;
 	int time;
-	unsigned ts;
 
 	configure_adc_ports_ltc1408(clk, SCLK, CNVST, DATA);
 

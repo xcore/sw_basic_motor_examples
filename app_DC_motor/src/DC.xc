@@ -9,7 +9,11 @@
 #include <syscall.h>
 #include <xs1.h>
 #include <stdio.h>
-//#include <xscope.h>
+
+#ifdef USE_XSCOPE
+#include <xscope.h>
+#endif
+
 #include "watchdog.h"
 #include "config.h"
 #include "pwm_singlebit_port.h"
@@ -40,45 +44,27 @@
 #define 	K_P        	    5000
 #define 	K_I        	    10000
 
-#define     PERIOD_PER_SEC  
+#define     PERIOD_PER_SEC
+
 //PWM clock and Watchdog port
+on stdcore[INTERFACE_CORE] : out port i2c_wd = PORT_WATCHDOG;
+
+// PWM
 on stdcore[MOTOR_CORE] : clock pwm_clk = XS1_CLKBLK_1;
-on stdcore[MOTOR_CORE] : out port i2c_wd = PORT_I2C_WD_SHARED;
-
-//High sides of half-bridges
 on stdcore[MOTOR_CORE] : out buffered port:32 motor_DC_hi[4] = {PORT_M1_HI_A, PORT_M1_HI_B, PORT_M2_HI_A, PORT_M2_HI_B};
-
-//Low sides of half-bridges
 on stdcore[MOTOR_CORE] : out port motor_DC_lo[4] = {PORT_M1_LO_A, PORT_M1_LO_B, PORT_M2_LO_A, PORT_M2_LO_B};
 
 //Motor Encoders on Motor 1 and Motor 2
-on stdcore[MOTOR_CORE] : in port encoder[2] = {PORT_M1_ENCODER, PORT_M2_ENCODER};
-
-//ADC ports
-on stdcore[MOTOR_CORE]: out port ADC_SCLK = PORT_ADC_CLK;
-on stdcore[MOTOR_CORE]: buffered out port:32 ADC_CNVST = PORT_ADC_CONV;
-on stdcore[MOTOR_CORE]: buffered in port:32 ADC_DATA = PORT_ADC_MISO;
-on stdcore[MOTOR_CORE]: in port ADC_SYNC_PORT = XS1_PORT_16A;
-on stdcore[MOTOR_CORE]: clock adc_clk = XS1_CLKBLK_2;
+on stdcore[MOTOR_CORE] : in port encoder[2] = {PORT_M1_HALLSENSOR, PORT_M2_HALLSENSOR};
 
 // core with LCD and BUTTON interfaces
-on stdcore[INTERFACE_CORE]: lcd_interface_t lcd_ports = { PORT_DS_SCLK, PORT_DS_MOSI, PORT_DS_CS_N, PORT_CORE1_SHARED };
-on stdcore[INTERFACE_CORE]: in port p_btns[4] = {PORT_BUTTON_A, PORT_BUTTON_B, PORT_BUTTON_C, PORT_BUTTON_D};
+on stdcore[INTERFACE_CORE]: lcd_interface_t lcd_ports = { PORT_SPI_CLK, PORT_SPI_MOSI, PORT_SPI_SS_DISPLAY, PORT_SPI_DSA };
+on stdcore[INTERFACE_CORE]: in port p_btns = PORT_BUTTONS;
 
 
 
 //Example of control
 void controller (chanend c_control) {
-    ramp_parameters rampParam = {40,50,0,1000,1};
-    ramp_parameters rampParam2 = {40,160,1,500,1};
-    
-    /*c_control <: CMD_RAMP;
-    c_control <: 0;             //Which motor to ramp
-    c_control <: rampParam;
-    */
-    /*c_control <: CMD_RAMP;
-    c_control <: 1;
-    c_control <: rampParam2;*/
     
     c_control <: CMD_SET_MOTOR_SPEED;
     c_control <: 0;
@@ -111,7 +97,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 
     //Wait 0.5s to ensure watchdog works correctly
     t :> ts;
-    t when timerafter ( ts + 50000000 ) :> ts;
+    t when timerafter ( ts + 100000000 ) :> ts;
     c_wd <: WD_CMD_START;
 
     //Ensure all low sides are zero
@@ -124,20 +110,19 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
     t_speed :> time_speed;
     time += PERIOD;
     time_speed += ONE_SECOND;
-    /*xscope_register(1,
-    XSCOPE_CONTINUOUS, "Reference 1", XSCOPE_UINT, "Value");
-    
-    xscope_config_io(XSCOPE_IO_BASIC);*/
 
-	//Turn on low sides of M1 phase A and M2 phase A
-    for (j = 0; j < NUM_MOTORS; j++)    
-        motor_DC_lo[((2*j)+1)] <: 1;
-    
+#ifdef USE_XSCOPE
+    xscope_register(1, XSCOPE_CONTINUOUS, "Reference 1", XSCOPE_UINT, "Value");
+    xscope_config_io(XSCOPE_IO_BASIC);
+#endif
+
 	while (1) {
         select {
+
             //Loop for updating PWM duty cycle
             case t when timerafter (time) :> void:
                 for (j=0;j<NUM_MOTORS;j++) {
+
 			        // Calculate the speed with first order filter
 				    speed_current[j] = ( rotations[j] - rotations_old[j]) * ( period_per_second );
 				    speed_actual[j] = ( ( speed_current[j] * 1000 ) + ( speed_previous[j] * 9000) ) / 10000;
@@ -167,16 +152,14 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 			        
 				    // Limit the motor speed to 100% (out of 256)
 				    if ( duty[j] < -255 )	{ duty[j] = -255; }
-				    else if ( duty[j] > 255 )	{ duty[j] = 255; }
+				    else if ( duty[j] > 256 )	{ duty[j] = 256; }
 				    
 				    //If we're going backwards then invert the duty cycle
 				    if (direction[j])  { 
 				        duty[j] = -duty[j]; 
 				    }
-                }      
-                //xscope_probe_data(0, duty[0]);
-                
-                for (j=0; j<NUM_MOTORS; j++) {
+
+
                     //deal with ramping
                     if (doRamp[j]) {
                         if (rampPeriodCount[j] == rampParam[j].rampPeriod) {
@@ -188,26 +171,22 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
                         if (speed_desired[j] == rampParam[j].targetSpeed)
                             doRamp[j] = 0;
                     }
-				    //If the duty cycle has gone negative, reverse current direction
+
+				    // If the duty cycle has gone negative, reverse current direction
                     if (duty[j] < 0) {
-                    //TODO: Don't call the pwm routine twice
-                        duties[0 + (2*j)] = 0;
+                        duties[0 + (2*j)] = 0; // high A
                         pwmSingleBitPortSetDutyCycle(c, duties, (NUM_MOTORS*2));
-                        motor_DC_lo[1 + (2*j)] <: 0;
-                        motor_DC_lo[0 + (2*j)] <: 1;
-                        duties[1+(2*j)] = -duty[j];
+                        motor_DC_lo[1 + (2*j)] <: 0; // low B
+                        motor_DC_lo[0 + (2*j)] <: 1; // low A
+                        duties[1 + (2*j)] = -duty[j]; // high B
                     }
-                    
-                   
-                    
-                    
-				//Otherwise set up for normal operation
+                    // Otherwise set up for normal operation
                     else {
-                        duties[0 + (2*j)] = 0;
+                        duties[1 + (2*j)] = 0; // high B
                         pwmSingleBitPortSetDutyCycle(c, duties, (NUM_MOTORS*2));
-                        motor_DC_lo[0+(2*j)] <: 0;
-                        motor_DC_lo[1+(2*j)] <: 1; 
-                        duties[0+(2*j)] = duty[j];
+                        motor_DC_lo[0 + (2*j)] <: 0; // low A
+                        motor_DC_lo[1 + (2*j)] <: 1; // low B
+                        duties[0 + (2*j)] = duty[j]; // high A
                     }
                     rampPeriodCount[j]++; 
                 }
@@ -235,8 +214,6 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
                 else if (cmd == CMD_GET_MOTOR_SPEED) {
                     c_control <: current_rpm[0];
                 }
-                /*else if (cmd == CMD_POSITION)
-                    c_control <: targetPosition*/
                 break;
             
 
@@ -274,6 +251,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
                 }
                 time_speed += ONE_SECOND;
                 break;
+
             //Process a command received from the display
             case c_speed[0] :> cmd:
 			    if (cmd == CMD_GET_IQ)
@@ -283,7 +261,6 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 			    }
 			    else if (cmd == CMD_SET_SPEED)
 			    {
-
 				    c_speed[0] :> speed_desired[0];
 			    }
 			    else if (cmd == CMD_DIR)
@@ -315,7 +292,7 @@ int main(void) {
 
 
 	par {
-    	on stdcore[MOTOR_CORE] : do_wd(c_wd, i2c_wd) ;
+    	on stdcore[INTERFACE_CORE] : do_wd(c_wd, i2c_wd) ;
         on stdcore[INTERFACE_CORE] : controller(c_control);
     	on stdcore[MOTOR_CORE] : motors( c_wd, c_speed, c, c_control);
         on stdcore[INTERFACE_CORE] : display_shared_io_motor( c_speed[0], c_speed[1], lcd_ports, p_btns);
@@ -324,4 +301,5 @@ int main(void) {
 	}
 	return 0;
 }
+
 

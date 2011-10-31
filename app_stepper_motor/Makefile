@@ -2,7 +2,7 @@
 # compiled for. It either refers to an XN file in the source directories
 # or a valid argument for the --target option when compiling.
 
-TARGET = XP-DSC-BLDC
+TARGET = XS1-L2A-QF124
 BASE_DIR = .
 
 # The APP_NAME variable determines the name of the final .xe file. It should
@@ -23,8 +23,7 @@ XCC_FLAGS = -g -lxscope
 
 # The USED_MODULES variable lists other module used by the application. 
 
-USED_MODULES = #module_pwm_singlebit_port.1v0
-#USED_MODULES += module_lib_fixed_8_24 module_lib_uint_32
+USED_MODULES = 
 
 #=============================================================================
 # The following part of the Makefile includes the common build infrastructure
