@@ -1,0 +1,17 @@
+<?xml version="1.0" ?>
+<xpd>
+    <dependency repo = "sc_pwm">
+        <githash>7343869575a8bf7d2045c9f4a609391907099ca2</githash>
+        <uri>git@github.com:xcore/sc_pwm.git</uri>
+    </dependency>
+    <dependency repo = "xcommon">
+        <githash>a84cf50fd3719df396345f2f55e1dca20354f3a2</githash>
+        <uri>https://github.com/xcore/xcommon.git</uri>
+    </dependency>
+    <description>Basic control of brushed DC and stepper motors</description>
+    <location>git@github.com:xcore/sw_basic_motor_examples.git</location>
+    <name>sw_basic_motor_examples</name>
+    <maintainer>DavidNorman</maintainer>
+    <vendor>XMOS</vendor>
+    <xpd_version>1.0</xpd_version>
+</xpd>
