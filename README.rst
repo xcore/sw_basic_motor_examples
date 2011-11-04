@@ -30,7 +30,11 @@ To Do
 Known Issues
 ============
 
-* 
+* The XMOS motor control board is designed for 24V motors.  To run the 12V brushed DC and
+  12V stepper motors, the undervoltage section of the power board needs to be modified to
+  prevent it from stopping the FETs.  The resistor R99, found near the centre of the power
+  board, should be replaced by a 68K resistor.  This will convert the undervoltage protection
+  to 11.7V.  Alternatively, removing resistor R100 will disable the undervoltage completely.
 
 Required Repositories
 ================

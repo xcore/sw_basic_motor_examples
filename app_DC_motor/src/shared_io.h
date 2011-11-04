@@ -16,9 +16,6 @@
 	#define CMD_GET_IQ		2
 	#define CMD_SET_SPEED	3
     #define CMD_DIR         4
-	#define CMD_GET_IQ2		5
-	#define CMD_SET_SPEED2	6
-	#define CMD_DIR2        7
 	#define STEP_SPEED 		10
 	#define _30_Msec		3000000
 	#define MSec 100000

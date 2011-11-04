@@ -18,6 +18,8 @@
 #define INITIAL_SET_SPEED 50
 #define PWM_INC_DEC_VAL 10
 #define MAX_RPM 250
-#define MIN_RPM 1
+#define MIN_RPM 10
+
+#define NUM_MOTORS 2
 
 #endif /* CONFIG_H_ */

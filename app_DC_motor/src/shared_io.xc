@@ -39,8 +39,9 @@ void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lc
 				c_lcd1 <: CMD_GET_IQ;
 				c_lcd1 :> speed1;
 				c_lcd1 :> set_speed;
-				c_lcd2 <: CMD_GET_IQ2;
+				c_lcd2 <: CMD_GET_IQ;
 				c_lcd2 :> speed2;
+				c_lcd2 :> set_speed;
 
 		        /* Calculate the strings here */
 		        /* Now update the display */
@@ -76,7 +77,7 @@ void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lc
 		            /* Update the speed control loop */
 					c_lcd1 <: CMD_SET_SPEED;
 					c_lcd1 <: set_speed;
-					c_lcd2 <: CMD_SET_SPEED2;
+					c_lcd2 <: CMD_SET_SPEED;
 					c_lcd2 <: set_speed;
 
 			        /* Increment the debouncer */
@@ -94,7 +95,7 @@ void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lc
 			        /* Update the speed control loop */
 					c_lcd1 <: CMD_SET_SPEED;
 					c_lcd1 <: set_speed;
-					c_lcd2 <: CMD_SET_SPEED2;
+					c_lcd2 <: CMD_SET_SPEED;
 					c_lcd2 <: set_speed;
 
 			        /* Increment the debouncer */
@@ -111,7 +112,7 @@ void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lc
 			            /* Update the speed control loop */
 						c_lcd1 <: CMD_SET_SPEED;
 						c_lcd1 <: set_speed;
-						c_lcd2 <: CMD_SET_SPEED2;
+						c_lcd2 <: CMD_SET_SPEED;
 						c_lcd2 <: set_speed;
 						timer_2 :> ts;
 						timer_2 when timerafter(ts + _30_Msec) :> ts;
@@ -120,12 +121,12 @@ void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lc
 			        /* Update the speed control loop */
 					c_lcd1 <: CMD_SET_SPEED;
 					c_lcd1 <: set_speed;
-					c_lcd2 <: CMD_SET_SPEED2;
+					c_lcd2 <: CMD_SET_SPEED;
 					c_lcd2 <: set_speed;
 			        /* Update the direction change */
 					c_lcd1 <: CMD_DIR;
 					c_lcd1 <: toggle;
-					c_lcd2 <: CMD_DIR2;
+					c_lcd2 <: CMD_DIR;
 					c_lcd2 <: toggle;
 			        /* to avoid jerks during the direction change*/
 					while(set_speed < temp)
@@ -133,7 +134,7 @@ void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lc
 						set_speed += STEP_SPEED;
 						c_lcd1 <: CMD_SET_SPEED;
 						c_lcd1 <: set_speed;
-						c_lcd2 <: CMD_SET_SPEED2;
+						c_lcd2 <: CMD_SET_SPEED;
 						c_lcd2 <: set_speed;
 						timer_2 :> ts;
 						timer_2 when timerafter(ts + _30_Msec) :> ts;
@@ -142,7 +143,7 @@ void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lc
 			        /* Update the speed control loop */
 					c_lcd1 <: CMD_SET_SPEED;
 					c_lcd1 <: set_speed;
-					c_lcd2 <: CMD_SET_SPEED2;
+					c_lcd2 <: CMD_SET_SPEED;
 					c_lcd2 <: set_speed;
 
 			        /* Increment the debouncer */

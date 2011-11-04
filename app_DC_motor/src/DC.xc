@@ -10,6 +10,8 @@
 #include <xs1.h>
 #include <stdio.h>
 
+#define USE_XSCOPE
+
 #ifdef USE_XSCOPE
 #include <xscope.h>
 #endif
@@ -29,13 +31,19 @@
 * -ve Motor = PH B
 */
 
+
 //Defines for PWM library
 //Period for PWM should be (Resolution * 20 * Timestep) in ns?
 #define 	RESOLUTION	    256
 #define 	TIMESTEP	    2
 
-#define 	PERIOD		    100000
-#define     NUM_MOTORS      2
+// Loop time for the control loop
+//
+//   At 160rpm 1:52 gear -> 8320rpm / 60 -> 138revs per sec * 12 -> 1664 encoder counts per second
+//   At 100rpm 1:52 gear -> 5200rpm / 60 -> 80revs per sec * 12  -> 1040 encoder counts per second
+//   So we need a speed analysis loop of slower than 1040 Hz
+//
+#define 	PERIOD		    1000000
 
 #define START_SPEED
 
@@ -45,6 +53,10 @@
 #define 	K_I        	    10000
 
 #define     PERIOD_PER_SEC
+
+#define ENCODER_COUNTS_PER_REV	12
+
+#define MAX_DUTY_CYCLE 128
 
 //PWM clock and Watchdog port
 on stdcore[INTERFACE_CORE] : out port i2c_wd = PORT_WATCHDOG;
@@ -61,20 +73,22 @@ on stdcore[MOTOR_CORE] : in port encoder[2] = {PORT_M1_HALLSENSOR, PORT_M2_HALLS
 on stdcore[INTERFACE_CORE]: lcd_interface_t lcd_ports = { PORT_SPI_CLK, PORT_SPI_MOSI, PORT_SPI_SS_DISPLAY, PORT_SPI_DSA };
 on stdcore[INTERFACE_CORE]: in port p_btns = PORT_BUTTONS;
 
-
+static const char sensor_pattern[2][4]  = { { 0xd, 0x9, 0xb, 0xf }, { 0xf, 0xb, 0x9, 0xd } };
 
 //Example of control
 void controller (chanend c_control) {
     
     c_control <: CMD_SET_MOTOR_SPEED;
     c_control <: 0;
-    c_control <: 50;
+    c_control <: 100;
     c_control <: 0;
     
+#if NUM_MOTORS > 1
     c_control <: CMD_SET_MOTOR_SPEED;
     c_control <: 1;
     c_control <: 160;
     c_control <: 1;
+#endif
 
 }
 
@@ -82,18 +96,51 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
     
     //TODO: Store vars in struct to better allow for more motors
     timer t, t_ramp, t_speed;
-    unsigned rotor[2] = {0,0};
-    int time, time_speed, time_ramp, ts, lastA[2] = {0,0}, current_rpm[2] = {0,0}, rotations_old_speed[NUM_MOTORS], j, cmd;
-    int speed_desired[NUM_MOTORS] = {0,0}, speed_current[NUM_MOTORS]={0,0}, speed_actual[NUM_MOTORS]={0,0}, speed_previous[NUM_MOTORS] = {0,0};
-    int rotations_old[NUM_MOTORS] = {0,0}, pid_I[NUM_MOTORS] = {0,0}, pid_P[NUM_MOTORS] = {0,0}, error[NUM_MOTORS];
-    int rotations[NUM_MOTORS] = {0,0}, duty[NUM_MOTORS] = {0,0};
-    unsigned int duties[4] = {0,0,0,0};
+    int time, time_speed, time_ramp, ts, j, cmd;
+    unsigned rotor[NUM_MOTORS];
+    int current_rpm[NUM_MOTORS];
+    int rotations_old_speed[NUM_MOTORS];
+    int speed_desired[NUM_MOTORS];
+    int speed_current[NUM_MOTORS];
+    int speed_actual[NUM_MOTORS];
+    int speed_previous[NUM_MOTORS];
+    int rotations_old[NUM_MOTORS];
+    int pid_I[NUM_MOTORS];
+    int pid_P[NUM_MOTORS];
+    int error[NUM_MOTORS];
+    int rotations[NUM_MOTORS];
+    int duty[NUM_MOTORS];
+    unsigned int duties[NUM_MOTORS*2];
     
-    int doRamp[NUM_MOTORS] = {0,0}, direction[NUM_MOTORS] = {0,0}, whichMotor, rampPeriodCount[NUM_MOTORS] = {0,0};
+    int doRamp[NUM_MOTORS];
+    int direction[NUM_MOTORS];
+    int whichMotor;
+    int rampPeriodCount[NUM_MOTORS];
     ramp_parameters rampParam[NUM_MOTORS];
     
     //calculate once as optimisation
     int period_per_second = ONE_SECOND / PERIOD;
+
+    for (unsigned int n=0; n<NUM_MOTORS; ++n) {
+    	rotor[n] = 0;
+        current_rpm[n] = 0;
+        speed_desired[n] = 0;
+        speed_current[n] = 0;
+        speed_actual[n] = 0;
+        speed_previous[n] = 0;
+        rotations_old[n] = 0;
+        rotations_old_speed[n] = 0;
+        pid_I[n] = 0;
+        pid_P[n] = 0;
+        rotations[n] = 0;
+        duty[n] = 0;
+        duties[2*n+0] = 0;
+        duties[2*n+1] = 0;
+        rampPeriodCount[n] = 0;
+        direction[n] = 0;
+        doRamp[n] = 0;
+    }
+
 
     //Wait 0.5s to ensure watchdog works correctly
     t :> ts;
@@ -112,7 +159,9 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
     time_speed += ONE_SECOND;
 
 #ifdef USE_XSCOPE
-    xscope_register(1, XSCOPE_CONTINUOUS, "Reference 1", XSCOPE_UINT, "Value");
+    xscope_register(2,
+    	XSCOPE_CONTINUOUS, "Reference 1", XSCOPE_UINT, "n",
+    	XSCOPE_CONTINUOUS, "Reference 2", XSCOPE_UINT, "n");
     xscope_config_io(XSCOPE_IO_BASIC);
 #endif
 
@@ -129,7 +178,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 				    speed_previous[j] = speed_actual[j];
 				
 				    // Calculate the error  
-				    error[j] = speed_desired[j] - speed_actual[j];
+				    error[j] = (speed_desired[j] * 60 * 52 * ENCODER_COUNTS_PER_REV) - speed_actual[j];
 
 				    rotations_old[j] = rotations[j];
 				
@@ -141,7 +190,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 				    }
 											
 				    // Calculate the integrator
-				    if ( ( duty[j] > -250 ) && ( duty[j] < 250 ) )
+				    if ( ( duty[j] > -MAX_DUTY_CYCLE ) && ( duty[j] < MAX_DUTY_CYCLE ) )
 				    {
 					    pid_I[j] += error[j]  * ( K_I / ( period_per_second ) );
 				    }
@@ -151,12 +200,12 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 				    duty[j] = (pid_P[j] + pid_I[j]) >> 12;
 			        
 				    // Limit the motor speed to 100% (out of 256)
-				    if ( duty[j] < -255 )	{ duty[j] = -255; }
-				    else if ( duty[j] > 256 )	{ duty[j] = 256; }
+				    if ( duty[j] < -MAX_DUTY_CYCLE )	{ duty[j] = -MAX_DUTY_CYCLE; }
+				    else if ( duty[j] > MAX_DUTY_CYCLE )	{ duty[j] = MAX_DUTY_CYCLE; }
 				    
 				    //If we're going backwards then invert the duty cycle
 				    if (direction[j])  { 
-				        duty[j] = -duty[j]; 
+				        duty[j] = -duty[j];
 				    }
 
 
@@ -216,68 +265,38 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
                 }
                 break;
             
-
-            case encoder[0] when pinsneq(rotor[0]) :>rotor[0]:
-                //if A = 1 and lastA = 0
-                if (((rotor[0]>>2)==1) && (lastA[0] == 0)) {
-                    //if B=0
-                    if ((rotor[0]>>1)<3)
-                        rotations[0]++;
-                    else
-                        rotations[0]++;//--;
-                }
-				//set up for next loop                
-				lastA[0] = (rotor[0] >> 2);
-                break;
-
-            case encoder[1] when pinsneq(rotor[1]) :>rotor[1]:
-                //if A = 1 and lastA = 0
-                if (((rotor[1]>>2)==1) && (lastA[1] == 0)) {
-                    //if B=0
-                    if ((rotor[1]>>1)<3)
-                        rotations[1]++;
-                    else
-                        rotations[1]++;//--;
-                }
-				//set up for next loop                
-				lastA[1] = (rotor[1] >> 2);
+            // Hall B and Hall C are wired to the motor on bits 1 and 2
+            // so hall pattern is F->B->9->D
+            case (int n=0; n<NUM_MOTORS; n++) encoder[n] when pinseq(sensor_pattern[direction[n]][rotor[n]]) :> cmd:
+				if (cmd == 0xF) {
+					rotations[n]++;
+				}
+				rotor[n] = (rotor[n]+1) & 0x3;
                 break;
 
             //calculate RPM for display
             case t_speed when timerafter(time_speed) :> void:
                 for (int i = 0; i < NUM_MOTORS; i++) {
-                    current_rpm[i] = (((rotations[i]-rotations_old_speed[i])*120)/624);
+                    current_rpm[i] = (rotations[i]-rotations_old_speed[i]) * (60 / ENCODER_COUNTS_PER_REV);
                     rotations_old_speed[i] = rotations[i];
                 }
-                time_speed += ONE_SECOND;
+                time_speed += (ONE_SECOND/10);
                 break;
 
             //Process a command received from the display
-            case c_speed[0] :> cmd:
+            case (int n=0; n<NUM_MOTORS; ++n) c_speed[n] :> cmd:
 			    if (cmd == CMD_GET_IQ)
 			    {
-				    c_speed[0] <: current_rpm[0];
-				    c_speed[0] <: speed_desired[0];
+				    c_speed[n] <: current_rpm[n];
+				    c_speed[n] <: speed_desired[n];
 			    }
 			    else if (cmd == CMD_SET_SPEED)
 			    {
-				    c_speed[0] :> speed_desired[0];
+				    c_speed[n] :> speed_desired[n];
 			    }
 			    else if (cmd == CMD_DIR)
 			    {
-			        direction[0] = !direction[0];
-			        direction[1] = !direction[1];
-			    }
-			    break;
-            //Process a command received from the display
-            case c_speed[1] :> cmd:
-			    if (cmd == CMD_GET_IQ2)
-			    {
-				    c_speed[1] <: current_rpm[1];
-			    }
-			    else if (cmd == CMD_SET_SPEED2)
-			    {
-				    c_speed[1] :> speed_desired[0];
+			    	direction[n] = !direction[n];
 			    }
 			    break;
         }
