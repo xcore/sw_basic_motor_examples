@@ -3,7 +3,7 @@ Brushed DC Motor
 
 The directory *app_DC_motor* contains an application for speed control of two DC motors.
 
-Physical Connections
+Physical connections
 --------------------
 
 The code uses a simple unipolar PWM to control the high sides of an H-bridge, the low sides being merely switched depending on the direction of rotation. Half-bridges A and B are used.
@@ -28,6 +28,9 @@ The following threads are running on the motor platform.
 +------+-----------------------------------+
 |  1   | pwmSinglePort                     |
 +------+-----------------------------------+
+
+The system requires the single port PWM component from the *sc_pwm* open source repository.
+
 
 
 Main control loop

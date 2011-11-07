@@ -19,7 +19,6 @@
 #include "watchdog.h"
 #include "config.h"
 #include "pwm_singlebit_port.h"
-#include "adc.h"
 #include "shared_io.h"
 #include "DC.h"
 
@@ -312,7 +311,7 @@ int main(void) {
     	on stdcore[INTERFACE_CORE] : do_wd(c_wd, i2c_wd) ;
         on stdcore[INTERFACE_CORE] : controller(c_control);
     	on stdcore[MOTOR_CORE] : motors( c_wd, c_speed, c, c_control);
-        on stdcore[INTERFACE_CORE] : display_shared_io_motor( c_speed[0], c_speed[1], lcd_ports, p_btns);
+        on stdcore[INTERFACE_CORE] : display_gpio( c_speed[0], c_speed[1], lcd_ports, p_btns);
         
         on stdcore[MOTOR_CORE] : pwmSingleBitPort(c, pwm_clk, motor_DC_hi, (NUM_MOTORS*2), RESOLUTION, TIMESTEP,1);
 	}

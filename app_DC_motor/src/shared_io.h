@@ -10,16 +10,17 @@
 #include "config.h"
 #include "lcd.h"
 
-	// Individual command interfaces
+// Individual command interfaces
 
-	#define CMD_GET_VALS	1
-	#define CMD_GET_IQ		2
-	#define CMD_SET_SPEED	3
-    #define CMD_DIR         4
-	#define STEP_SPEED 		10
-	#define _30_Msec		3000000
-	#define MSec 100000
+#define CMD_GET_VALS	1
+#define CMD_GET_IQ		2
+#define CMD_SET_SPEED	3
+#define CMD_DIR         4
+#define STEP_SPEED 		10
 
-	void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lcd_interface_t, p), port in btns);
+#define _30_Msec		3000000
+#define MSec 100000
 
-#endif /* SHARED_IO_H_ */
+void display_gpio( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lcd_interface_t, p), port in btns);
+
+#endif
