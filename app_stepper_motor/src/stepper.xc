@@ -13,7 +13,7 @@
 #include "watchdog.h"
 #include "config.h"
 #include "pwm_singlebit_port.h"
-#include "adc.h"
+#include "adc_7265.h"
 #include "tables.h"
 #include "stepper.h"
 
@@ -21,15 +21,17 @@
 on stdcore[MOTOR_CORE] : clock pwm_clk = XS1_CLKBLK_1;
 
 //Watchdog port
-on stdcore[MOTOR_CORE]: out port i2c_wd = PORT_I2C_WD_SHARED;
+on stdcore[INTERFACE_CORE]: out port i2c_wd = PORT_WATCHDOG;
 
 //Buffered port for high and low sides of four half bridges
 on stdcore[MOTOR_CORE] : out buffered port:32 motor_ports[8] = { PORT_M1_HI_A, PORT_M2_HI_A, PORT_M1_HI_B, PORT_M1_HI_C, PORT_M1_LO_A, PORT_M2_LO_A, PORT_M1_LO_B, PORT_M1_LO_C};
 
 //Ports for ADC
 on stdcore[MOTOR_CORE]: out port ADC_SCLK = PORT_ADC_CLK;
-on stdcore[MOTOR_CORE]: buffered out port:32 ADC_CNVST = PORT_ADC_CONV;
-on stdcore[MOTOR_CORE]: buffered in port:32 ADC_DATA = PORT_ADC_MISO;
+on stdcore[MOTOR_CORE]: port ADC_CNVST = PORT_ADC_CONV;
+on stdcore[MOTOR_CORE]: buffered in port:32 ADC_DATA_A = PORT_ADC_MISOA;
+on stdcore[MOTOR_CORE]: buffered in port:32 ADC_DATA_B = PORT_ADC_MISOB;
+on stdcore[MOTOR_CORE]: out port ADC_MUX = PORT_ADC_MUX;
 on stdcore[MOTOR_CORE]: in port ADC_SYNC_PORT = XS1_PORT_16A;
 on stdcore[MOTOR_CORE]: clock adc_clk = XS1_CLKBLK_2;
 
@@ -237,20 +239,20 @@ void setWindingPWM(int PIOutput[], enum decay decayMode[],  chanend c_pwm) {
     
 }
 
-void getWindingADC ( chanend c_adc) {
-    int adc[4] = {0,0,0,0};
-    int temp;
+void getWindingADC ( streaming chanend c_adc) {
+    int adc[4] = {200,200,200,200};
+    //int temp;
     
     //Get the adc values
-    c_adc <: 6;
-    slave {
-        c_adc :> adc[0]; 
-        c_adc :> adc[1];
-        c_adc :> adc[2];
-        c_adc :> adc[3];
-        c_adc :> temp;
-        c_adc :> temp;
-    }
+//    c_adc <: 6;
+//    slave {
+//        c_adc :> adc[0];
+//        c_adc :> adc[1];
+//        c_adc :> adc[2];
+//        c_adc :> adc[3];
+//        c_adc :> temp;
+//        c_adc :> temp;
+//    }
     
     //make sure we only use the positive part
     for (int i = 0; i < 4; i++)
@@ -284,11 +286,9 @@ void getWindingADC ( chanend c_adc) {
 ** 0	0	0	255
 */    
 
-void singleStep(chanend c_pwm, unsigned int &step, unsigned microPeriod, chanend c_adc) {
+void singleStep(chanend c_pwm, unsigned int &step, unsigned microPeriod, streaming chanend c_adc) {
 
     int currentReference[2];
-    static int lastRefCurrent[2] = {0,0};
-    static int limitFlag[2] = {0,0};
     
     //If we've reached the end of a sine wave then reset the step count
     if (step > COS_SIZE*4) {
@@ -447,10 +447,9 @@ void singleStep(chanend c_pwm, unsigned int &step, unsigned microPeriod, chanend
 }
 
 
-
-void motor(chanend c_pwm, chanend c_control, chanend c_wd, chanend c_adc) {
+void motor(chanend c_pwm, chanend c_control, chanend c_wd, streaming chanend c_adc) {
     unsigned int step = 0, noSteps = 0, stepCounter = 0, stepPeriod = 5000000, doSteps = 0, doSpeed = 1;
-    int step_dir = 1, tempRef[2];
+    int tempRef[2];
     enum decay tempDecay[2];
     int cmd;
 	timer speed_demo_timer, t;
@@ -473,8 +472,7 @@ void motor(chanend c_pwm, chanend c_control, chanend c_wd, chanend c_adc) {
     microstepTimer :> microstepTime;
     //delay to make sure the ADC is calibrated before starting output and watchdog is enabled
     t :> time;
-    t when timerafter (time+100000000) :> time;
-    
+    t when timerafter (time+200000000) :> time;
     c_wd <: WD_CMD_START;
     
     time += PERIOD;
@@ -520,26 +518,8 @@ void motor(chanend c_pwm, chanend c_control, chanend c_wd, chanend c_adc) {
                     setWindingPWM(tempRef, tempDecay, c_pwm);
                 }
                 break;
-                
-            //Ramps the speed up and down
-            /*case speed_demo_timer when timerafter(speed_demo_time + 20000000) :> speed_demo_time :
-
-                if (stepPeriod > 1000000)
-                    step_dir = 0;
-                else if (stepPeriod < 250000)
-                    step_dir = 1;
-                
-                if (step_dir == 1)
-                    stepPeriod += 50000;
-                else if (step_dir == 0)
-                    stepPeriod -= 50000;
                     
-                microStepPeriod = stepPeriod / ((COS_SIZE) / STEP_SIZE);
-                
-                break;   */ 
-            
-                    
-            //loop for speeda
+            //loop for speed
             case t when timerafter (time) :> void:
                 
                 if (doSpeed) {
@@ -565,24 +545,18 @@ void motor(chanend c_pwm, chanend c_control, chanend c_wd, chanend c_adc) {
 
 int main(void) {
 
-    chan c_control, c_pwm, c_wd, c_adc, c_adc_trig;
+    chan c_control, c_pwm, c_wd, c_adc_trig[1];
+    streaming chan  c_adc[1];
 
 	par {
 	    on stdcore[INTERFACE_CORE] : controller(c_control);
-    	on stdcore[MOTOR_CORE] : motor(c_pwm, c_control, c_wd, c_adc);
+    	on stdcore[MOTOR_CORE] : motor(c_pwm, c_control, c_wd, c_adc[0]);
     	
-    	//to stop flooding the ADC while it's calibrating, delay
-    	//should be a better way
-		on stdcore[MOTOR_CORE] : {
-        timer delayt;
-        int delaytime;
-        delayt :> delaytime;
-        delayt when timerafter (delaytime + 100000000) :> void;
-        pwmSingleBitPortTrigger(c_adc_trig, c_pwm, pwm_clk, motor_ports, 8, RESOLUTION, TIMESTEP, 1);
-        }
-        
-		on stdcore[MOTOR_CORE] : adc_ltc1408_triggered( c_adc, adc_clk, ADC_SCLK, ADC_CNVST, ADC_DATA, c_adc_trig);
-    	on stdcore[MOTOR_CORE] : do_wd(c_wd, i2c_wd);
+		on stdcore[MOTOR_CORE] : pwmSingleBitPortTrigger(c_adc_trig[0], c_pwm, pwm_clk, motor_ports, 8, RESOLUTION, TIMESTEP, 1);
+
+		on stdcore[MOTOR_CORE] : adc_7265_triggered(c_adc, c_adc_trig, adc_clk, ADC_SCLK, ADC_CNVST, ADC_DATA_A, ADC_DATA_B, ADC_MUX );
+
+    	on stdcore[INTERFACE_CORE] : do_wd(c_wd, i2c_wd);
 	}
 	return 0;
 }
