@@ -13,7 +13,7 @@
 /* Manages the display, buttons and shared ports. */
 void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lcd_interface_t, p), port in btns)
 {
-	unsigned int time, MIN_VAL=0, speed1 = 0, speed2 = 0, set_speed = INITIAL_SET_SPEED;
+	unsigned int time, speed1 = 0, speed2 = 0, set_speed = INITIAL_SET_SPEED;
 
 	unsigned int value = 0;
 	unsigned int btn_en = 0;
@@ -90,7 +90,6 @@ void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lc
 					if (set_speed < MIN_RPM)
 					{
 						set_speed = MIN_RPM;
-						MIN_VAL = set_speed;
 					}
 			        /* Update the speed control loop */
 					c_lcd1 <: CMD_SET_SPEED;

@@ -44,19 +44,19 @@
 //   So we need a speed analysis loop of slower than 1040 Hz
 //
 #define 	PERIOD		    1000000
-
-#define START_SPEED
+#define 	ONE_SECOND	    100000000 	// 1000ms
 
 //PID controller parameters
-#define 	ONE_SECOND	    100000000 	// 1000ms
-#define 	K_P        	    5000
-#define 	K_I        	    10000
+#define 	K_P        	    2000
+#define 	K_I        	    2000
 
-#define     PERIOD_PER_SEC
+// The gear ratio of the gearbox
+#define GEAR_RATIO 54
 
+// The number of complete encoder cycles that occurs in each revolution of the spindle
 #define ENCODER_COUNTS_PER_REV	12
 
-#define MAX_DUTY_CYCLE 128
+#define MAX_DUTY_CYCLE 160
 
 //PWM clock and Watchdog port
 on stdcore[INTERFACE_CORE] : out port i2c_wd = PORT_WATCHDOG;
@@ -80,13 +80,13 @@ void controller (chanend c_control) {
     
     c_control <: CMD_SET_MOTOR_SPEED;
     c_control <: 0;
-    c_control <: 100;
+    c_control <: 80;
     c_control <: 0;
     
 #if NUM_MOTORS > 1
     c_control <: CMD_SET_MOTOR_SPEED;
     c_control <: 1;
-    c_control <: 160;
+    c_control <: 80;
     c_control <: 1;
 #endif
 
@@ -117,9 +117,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
     int whichMotor;
     int rampPeriodCount[NUM_MOTORS];
     ramp_parameters rampParam[NUM_MOTORS];
-    
-    //calculate once as optimisation
-    int period_per_second = ONE_SECOND / PERIOD;
+
 
     for (unsigned int n=0; n<NUM_MOTORS; ++n) {
     	rotor[n] = 0;
@@ -172,16 +170,15 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
             case t when timerafter (time) :> void:
                 for (j=0;j<NUM_MOTORS;j++) {
 
-			        // Calculate the speed with first order filter
-				    speed_current[j] = ( rotations[j] - rotations_old[j]) * ( period_per_second );
+			        // Calculate the speed with first order filter (speed in encoder counts per second)
+				    speed_current[j] = (rotations[j] - rotations_old[j]) * (ONE_SECOND / PERIOD);
 				    speed_actual[j] = ( ( speed_current[j] * 1000 ) + ( speed_previous[j] * 9000) ) / 10000;
 				    speed_previous[j] = speed_actual[j];
-				
-				    // Calculate the error  
-				    error[j] = (speed_desired[j] * 60 * 52 * ENCODER_COUNTS_PER_REV) - speed_actual[j];
 
+				    // Calculate the error
+				    error[j] = (speed_desired[j] * GEAR_RATIO * ENCODER_COUNTS_PER_REV / 60) - speed_actual[j];
 				    rotations_old[j] = rotations[j];
-				
+
 				    // Stop the motors if the desired speed is 0 and reset the integrator
 				    if ( ( speed_desired[j] == 0 ) && ( speed_actual[j] > -200 ) && ( speed_actual[j] < 200 ) )
 				    {
@@ -190,10 +187,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 				    }
 											
 				    // Calculate the integrator
-				    if ( ( duty[j] > -MAX_DUTY_CYCLE ) && ( duty[j] < MAX_DUTY_CYCLE ) )
-				    {
-					    pid_I[j] += error[j]  * ( K_I / ( period_per_second ) );
-				    }
+				    pid_I[j] += error[j]  * ( K_I / ( ONE_SECOND / PERIOD ) );
 
 				    // Set output
 				    pid_P[j] = K_P * error[j];
@@ -202,12 +196,16 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 				    // Limit the motor speed to 100% (out of 256)
 				    if ( duty[j] < -MAX_DUTY_CYCLE )	{ duty[j] = -MAX_DUTY_CYCLE; }
 				    else if ( duty[j] > MAX_DUTY_CYCLE )	{ duty[j] = MAX_DUTY_CYCLE; }
+
+				    if (j==0) {
+				    	xscope_probe_data(0, error[j]);
+				    	xscope_probe_data(1, duty[j]);
+				    }
 				    
 				    //If we're going backwards then invert the duty cycle
 				    if (direction[j])  { 
 				        duty[j] = -duty[j];
 				    }
-
 
                     //deal with ramping
                     if (doRamp[j]) {
@@ -277,7 +275,7 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
             //calculate RPM for display
             case t_speed when timerafter(time_speed) :> void:
                 for (int i = 0; i < NUM_MOTORS; i++) {
-                    current_rpm[i] = (rotations[i]-rotations_old_speed[i]) * (60 / ENCODER_COUNTS_PER_REV);
+                    current_rpm[i] = ((rotations[i]-rotations_old_speed[i]) * 60 * 10) / (GEAR_RATIO * ENCODER_COUNTS_PER_REV);
                     rotations_old_speed[i] = rotations[i];
                 }
                 time_speed += (ONE_SECOND/10);

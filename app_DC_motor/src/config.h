@@ -15,10 +15,10 @@
 #define ADC_CALIB_POINTS 1024
 #define ADC_PERIOD 200000
 
-#define INITIAL_SET_SPEED 50
+#define INITIAL_SET_SPEED 2000
 #define PWM_INC_DEC_VAL 10
-#define MAX_RPM 250
-#define MIN_RPM 10
+#define MAX_RPM 150
+#define MIN_RPM 30
 
 #define NUM_MOTORS 2
 
