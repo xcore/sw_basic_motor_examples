@@ -39,9 +39,11 @@ void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lc
 				c_lcd1 <: CMD_GET_IQ;
 				c_lcd1 :> speed1;
 				c_lcd1 :> set_speed;
+#if NUM_MOTORS > 1
 				c_lcd2 <: CMD_GET_IQ;
 				c_lcd2 :> speed2;
 				c_lcd2 :> set_speed;
+#endif
 
 		        /* Calculate the strings here */
 		        /* Now update the display */
@@ -77,8 +79,10 @@ void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lc
 		            /* Update the speed control loop */
 					c_lcd1 <: CMD_SET_SPEED;
 					c_lcd1 <: set_speed;
+#if NUM_MOTORS > 1
 					c_lcd2 <: CMD_SET_SPEED;
 					c_lcd2 <: set_speed;
+#endif
 
 			        /* Increment the debouncer */
 					btn_en = 4;
@@ -94,8 +98,10 @@ void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lc
 			        /* Update the speed control loop */
 					c_lcd1 <: CMD_SET_SPEED;
 					c_lcd1 <: set_speed;
+#if NUM_MOTORS > 1
 					c_lcd2 <: CMD_SET_SPEED;
 					c_lcd2 <: set_speed;
+#endif
 
 			        /* Increment the debouncer */
 					btn_en = 4;
@@ -111,8 +117,10 @@ void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lc
 			            /* Update the speed control loop */
 						c_lcd1 <: CMD_SET_SPEED;
 						c_lcd1 <: set_speed;
+#if NUM_MOTORS > 1
 						c_lcd2 <: CMD_SET_SPEED;
 						c_lcd2 <: set_speed;
+#endif
 						timer_2 :> ts;
 						timer_2 when timerafter(ts + _30_Msec) :> ts;
 					}
@@ -133,8 +141,10 @@ void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lc
 						set_speed += STEP_SPEED;
 						c_lcd1 <: CMD_SET_SPEED;
 						c_lcd1 <: set_speed;
+#if NUM_MOTORS > 1
 						c_lcd2 <: CMD_SET_SPEED;
 						c_lcd2 <: set_speed;
+#endif
 						timer_2 :> ts;
 						timer_2 when timerafter(ts + _30_Msec) :> ts;
 					}
@@ -142,8 +152,10 @@ void display_shared_io_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lc
 			        /* Update the speed control loop */
 					c_lcd1 <: CMD_SET_SPEED;
 					c_lcd1 <: set_speed;
+#if NUM_MOTORS > 1
 					c_lcd2 <: CMD_SET_SPEED;
 					c_lcd2 <: set_speed;
+#endif
 
 			        /* Increment the debouncer */
 					btn_en = 4;
