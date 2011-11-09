@@ -60,6 +60,23 @@ PI control
 
 The core of the *motors* function periodically measures the speed of the motor, and uses a PI controller to alter the PWM duty cycle to keep the motor speed constant.
 
+The frequency of measurement and update of the PI controller is defined by the constant *PERIOD*, which is initially set to 10Hz, to avoid quantization problems in speed measurement.
+
+
+PWM configuration
+~~~~~~~~~~~~~~~~~
+
+The application uses the single port PWM controller from the *sc_pwm* module. This is capable of controlling multiple single bit PWM control lines.  In the case of the DC motor, four PWM lines are required, two for each motor.
+
+The constant *RESOLUTION* defines the number of PWM periods in each cycle, and the constant *TIMESTEP* defines the duration of each period, in 20ns multiples.  Initially, *TIMESTEP* is set to 2, meaning that the duration of each PWM period is 40ns, and the *RESOLUTION* is set to 256, giving 256 PWM steps, for a total PWM cycle time of 5120ns.
+
+
+Extending the demonstration for more motors
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+An XMOS core is capable of controlling many more than two motors.  The *sc_pwm* repository contains multiple versions of the PWM controller, allowing a variety of configurations to be used.
+
+The *pwm_multibit_port* module allows the PWM to control multiple channels using a 4, 8 or 16 bit port.  Since each brushed DC motor uses 2 pins, an 8 bit port would allow the control of 4 motors.
 
 
 
