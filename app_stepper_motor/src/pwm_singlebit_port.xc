@@ -29,7 +29,6 @@ void pwmSingleBitPort(
     unsigned int numTicks = 0;
     unsigned int value_te,value_le;
 
-    unsigned int testing;
     // Calculates the timer period
     unsigned int period = (timeStep == 0) ? 32 : 32 * (timeStep * 2);
     
@@ -143,7 +142,6 @@ void pwmSingleBitPortTrigger(
     unsigned int numTicks = 0;
     unsigned int value_te,value_le;
 
-    unsigned int testing;
     // Calculates the timer period
     unsigned int period = (timeStep == 0) ? 32 : 32 * (timeStep * 2);
     
