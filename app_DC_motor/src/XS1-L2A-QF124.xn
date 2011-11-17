@@ -65,8 +65,8 @@ xsi:schemaLocation="http://www.xmos.com http://www.xmos.com">
      		<Source Location="XMOSLINK"/>
    		</Boot>
     	<Core Number="0" Reference="stdcore[1]">
-    
-    <!-- MOTOR 1 -->
+   
+	<!-- MOTOR 1 -->
 	<Port Location="XS1_PORT_1D" Name="PORT_M1_HI_A" />
 	<Port Location="XS1_PORT_1A" Name="PORT_M1_LO_A" />
 	<Port Location="XS1_PORT_1E" Name="PORT_M1_HI_B" />
@@ -74,9 +74,9 @@ xsi:schemaLocation="http://www.xmos.com http://www.xmos.com">
 	<Port Location="XS1_PORT_1F" Name="PORT_M1_HI_C" />
 	<Port Location="XS1_PORT_1C" Name="PORT_M1_LO_C" />
 	<Port Location="XS1_PORT_4E" Name="PORT_M1_ENCODER" />
-    <Port Location="XS1_PORT_4A" Name="PORT_M1_HALLSENSOR" />
+	<Port Location="XS1_PORT_4A" Name="PORT_M1_HALLSENSOR" />
     
-    <!-- MOTOR 2 -->
+	<!-- MOTOR 2 -->
 	<Port Location="XS1_PORT_1N" Name="PORT_M2_HI_A" />
 	<Port Location="XS1_PORT_1K" Name="PORT_M2_LO_A" />
 	<Port Location="XS1_PORT_1O" Name="PORT_M2_HI_B" />
@@ -93,8 +93,8 @@ xsi:schemaLocation="http://www.xmos.com http://www.xmos.com">
 	<Port Location="XS1_PORT_1I" Name="PORT_ADC_MISOB"/>
 	<Port Location="XS1_PORT_4C" Name="PORT_ADC_MUX"/>
 
-    <!-- UV FAULT  --> 
-    <Port Location="XS1_PORT_8C" Name="PORT_UV_FAULT" />
+	<!-- UV FAULT  --> 
+	<Port Location="XS1_PORT_8C" Name="PORT_UV_FAULT" />
     
     	</Core>
     </Node>
@@ -119,7 +119,7 @@ xsi:schemaLocation="http://www.xmos.com http://www.xmos.com">
 	     <LinkEndpoint NodeId="1" Link="4"/>
 	   </Link>
     
-    <!-- XSCOPE -->
+    <!-- XSCOPE --
     <Link Encoding="2wire" Delays="4,5" Flags="SOD">
       <LinkEndpoint NodeId="1" Link="X0LB"/>
       <LinkEndpoint RoutingId="0x8000" Chanend="1"/>

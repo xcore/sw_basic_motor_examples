@@ -10,6 +10,7 @@
 #include <xs1.h>
 #include <stdio.h>
 #include <xscope.h>
+
 #include "watchdog.h"
 #include "config.h"
 #include "pwm_singlebit_port.h"
@@ -45,7 +46,7 @@ on stdcore[MOTOR_CORE]: clock adc_clk = XS1_CLKBLK_2;
 #define PIGAIN1 1000                
 #define PIGAIN2 50
 
-#define USE_XSCOPE
+//#define USE_XSCOPE
 
 // STEP_SIZE defines the number of microsteps to be used:
 // COS_SIZE / STEP_SIZE gives the number of microsteps

@@ -11,7 +11,7 @@
 
 
 /* Manages the display, buttons and shared ports. */
-void display_gpio( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lcd_interface_t, p), port in btns)
+void display_gpio_dc_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lcd_interface_t, p), port in btns)
 {
 	unsigned int time, speed1 = 0, speed2 = 0, set_speed = INITIAL_SET_SPEED;
 

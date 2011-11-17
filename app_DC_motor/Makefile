@@ -19,11 +19,12 @@ APP_NAME =
 # If the variable XCC_MAP_FLAGS is set it overrides the flags passed to
 # xcc for the final link (mapping) stage.
 
-XCC_FLAGS = -g -O3 -lxscope -Wall
+XCC_FLAGS = -g -O3
+#-lxscope
 
 # The USED_MODULES variable lists other module used by the application.
 
-USED_MODULES = module_dsc_blocks module_pwm_singlebit_port
+USED_MODULES = module_dsc_blocks module_pwm_singlebit_port module_dsc_display
 
 #=============================================================================
 # The following part of the Makefile includes the common build infrastructure

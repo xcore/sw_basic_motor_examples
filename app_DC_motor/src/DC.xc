@@ -10,7 +10,7 @@
 #include <xs1.h>
 #include <stdio.h>
 
-#define USE_XSCOPE
+//#define USE_XSCOPE
 
 #ifdef USE_XSCOPE
 #include <xscope.h>
@@ -196,10 +196,12 @@ void motors( chanend c_wd, chanend c_speed[], chanend c, chanend c_control) {
 				    if ( duty[j] < -MAX_DUTY_CYCLE )	{ duty[j] = -MAX_DUTY_CYCLE; }
 				    else if ( duty[j] > MAX_DUTY_CYCLE )	{ duty[j] = MAX_DUTY_CYCLE; }
 
+#ifdef USE_XSCOPE
 				    if (j==0) {
 				    	xscope_probe_data(0, error[j]);
 				    	xscope_probe_data(1, duty[j]);
 				    }
+#endif
 				    
 				    //If we're going backwards then invert the duty cycle
 				    if (direction[j])  { 
@@ -311,7 +313,7 @@ int main(void) {
     	on stdcore[INTERFACE_CORE] : do_wd(c_wd, i2c_wd) ;
         on stdcore[INTERFACE_CORE] : controller(c_control);
     	on stdcore[MOTOR_CORE] : motors( c_wd, c_speed, c, c_control);
-        on stdcore[INTERFACE_CORE] : display_gpio( c_speed[0], c_speed[1], lcd_ports, p_btns);
+        on stdcore[INTERFACE_CORE] : display_gpio_dc_motor( c_speed[0], c_speed[1], lcd_ports, p_btns);
         
         on stdcore[MOTOR_CORE] : pwmSingleBitPort(c, pwm_clk, motor_DC_hi, (NUM_MOTORS*2), RESOLUTION, TIMESTEP,1);
 	}

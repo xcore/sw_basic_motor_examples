@@ -21,6 +21,6 @@
 #define _30_Msec		3000000
 #define MSec 100000
 
-void display_gpio( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lcd_interface_t, p), port in btns);
+void display_gpio_dc_motor( chanend c_lcd1, chanend c_lcd2, REFERENCE_PARAM(lcd_interface_t, p), port in btns);
 
 #endif
