@@ -203,7 +203,7 @@ void setWindingPWM(const int refCurrentADC[], const int PIOutput[], const enum d
             duty[M2_LO_B] = 0;
         } 
         duty[M1_HI_B] = 0;
-        duty[M1_HI_C] = pi;
+        duty[M2_HI_B] = pi;
     }
     else if (refCurrentADC[1] < 0) {
     	int pi = (PIOutput[1] > 0) ? 0 : -PIOutput[1];
@@ -217,14 +217,14 @@ void setWindingPWM(const int refCurrentADC[], const int PIOutput[], const enum d
             duty[M2_LO_B] = pi;
         }
         duty[M1_HI_B] = pi;
-        duty[M1_HI_C] = 0;
+        duty[M2_HI_B] = 0;
     }
     else {
         duty[M1_LO_B] = 255;
         duty[M2_LO_B] = 255;
        
         duty[M1_HI_B] = 0;
-        duty[M1_HI_C] = 0;
+        duty[M2_HI_B] = 0;
     }
 
     pwmSingleBitPortSetDutyCycle(c_pwm, duty, 8);
