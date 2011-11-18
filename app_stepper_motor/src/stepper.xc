@@ -25,7 +25,16 @@ on stdcore[MOTOR_CORE] : clock pwm_clk = XS1_CLKBLK_1;
 on stdcore[INTERFACE_CORE]: out port i2c_wd = PORT_WATCHDOG;
 
 //Buffered port for high and low sides of four half bridges
-on stdcore[MOTOR_CORE] : out buffered port:32 motor_ports[8] = { PORT_M1_HI_A, PORT_M2_HI_A, PORT_M1_HI_B, PORT_M1_HI_C, PORT_M1_LO_A, PORT_M2_LO_A, PORT_M1_LO_B, PORT_M1_LO_C};
+on stdcore[MOTOR_CORE] : out buffered port:32 motor_ports[8] = { PORT_M1_HI_A, PORT_M2_HI_A, PORT_M1_HI_B, PORT_M2_HI_B, PORT_M1_LO_A, PORT_M2_LO_A, PORT_M1_LO_B, PORT_M2_LO_B};
+#define M1_HI_A 0
+#define M2_HI_A 1
+#define M1_HI_B 2
+#define M2_HI_B 3
+#define M1_LO_A 4
+#define M2_LO_A 5
+#define M1_LO_B 6
+#define M2_LO_B 7
+
 
 //Ports for ADC
 on stdcore[MOTOR_CORE]: out port ADC_SCLK = PORT_ADC_CLK;
@@ -36,23 +45,35 @@ on stdcore[MOTOR_CORE]: out port ADC_MUX = PORT_ADC_MUX;
 on stdcore[MOTOR_CORE]: in port ADC_SYNC_PORT = XS1_PORT_16A;
 on stdcore[MOTOR_CORE]: clock adc_clk = XS1_CLKBLK_2;
 
-#define RESOLUTION 256              //Resolution of PWM, normally 256                                          
-#define TIMESTEP 12                 //Determines frequency of PWM
-#define PERIOD 100000               //Initial step period
+// Resolution of PWM, normally 256
+#define RESOLUTION 256
 
+// Determines frequency of PWM
+#define TIMESTEP 12
+
+// Initial step period
+#define PERIOD 100000
+
+// Time period for updating the PWM values
 #define ADC_PERIOD 20000
 
-#define PI_ANTIWINDUP 500           //Anti wind-up gain
-#define PIGAIN1 1000                
+//Anti wind-up gain
+#define PI_ANTIWINDUP 500
+
+#define PIGAIN1 1000
 #define PIGAIN2 50
 
-//#define USE_XSCOPE
+#define USE_XSCOPE
+
+// The number of entries in the cosine lookup table
+#define COS_SIZE 256
 
 // STEP_SIZE defines the number of microsteps to be used:
-// COS_SIZE / STEP_SIZE gives the number of microsteps
-// {256,128,64,32,16,8,4,2 or 1} are valid values
+// Note: must be an exact divisor of COS_SIZE
 #define STEP_SIZE 16
-#define COS_SIZE 256
+
+// The number of microsteps
+#define MICROSTEP_COUNT ((COS_SIZE) / STEP_SIZE)
 
 //Sets the decay mode
 //slow = fixed decay (always slow decay)
@@ -60,50 +81,33 @@ on stdcore[MOTOR_CORE]: clock adc_clk = XS1_CLKBLK_2;
 //fast decay provides higher speeds with slightly noisier operation
 #define DECAY_MODE slow
 
+//Open loop limits current according to theoretical current from R and V
+//#define OPEN_LOOP_CHOPPING
+
+// Max phase current in milliamps
+// Note - only used if OPEN_LOOP_CHOPPING defined
+#define IMAX 200
 #define V_REF 12
 #define R_WINDING 44
 
-//Only used if OPEN_LOOP_CHOPPING or CLOSED_LOOP_CHOPPING defined
-#define IMAX 200      //max phase current in milliamps
+#define OPEN_LOOP_CHOPPED_DUTY_CYCLE ((IMAX << 13 * 255) / (((V_REF << 13) / (R_WINDING))*1000))
 
-//Open loop limits current according to theoretical current from R and V
-//Closed loop takes ADC reading and limits current above IMAX
-//#define OPEN_LOOP_CHOPPING 1
-//#define CLOSED_LOOP_CHOPPING 1
-//Maximum limited current in terms of ADC
-#define IMAX_ADC ((8192*IMAX)/6250)
+int output1 = 0, output2 = 0, finalStep, startupFlag = 1;
 
-
-unsigned iScaled = (((8192*V_REF*1000)/(6250*R_WINDING)));
-int iMaxADC = IMAX_ADC;
-int choppedDutyCycle = ((IMAX << 13 * 255) / (((V_REF << 13) / (R_WINDING))*1000));
-int temp1;
-int direction = FORWARD, testvar, maxRefI = 255, output1 = 0, output2 = 0, debugValue = 0,debugValue1 = 0, finalStep, startupFlag = 1;
-
-int windingCurrent[2] = {0,0}, adc_last[4] = {0,0,0,0}, refCurrentADC[2];
+int refCurrentADC[2];
 
 unsigned duty[8] = {0,0,0,0,0,0,0,0};
 
 enum decay {fast, slow};
 enum decay decayMode[2];
 
-int PISum0 = 0, PISum1 = 0, PILastError0 = 0, PILastError1 = 0, PIOutput[2] = {0,0};
-
-timer microstepTimer, adc_timer;
-int microstepTime, adc_time;
-
+int PISum0 = 0, PISum1 = 0;
+int PILastError0 = 0, PILastError1 = 0;
 
 void controller(chanend c_control) {
-    
-    timer ti;
-    int titime;
-    ti :> titime;
-    
     c_control <: CMD_SET_MOTOR_SPEED;
     c_control <: 1000000;   //Step Period 
     c_control <: FORWARD;     //Direction
-    
-    
 }
 
  
@@ -113,9 +117,7 @@ void controller(chanend c_control) {
 //TODO Sort out previous outputs
 int applyPI(int referenceI,int actualI, int &sum, int &lastError, int &lastOutput) {
    
-    int currentError;
-
-	currentError = referenceI - actualI;
+    int currentError = referenceI - actualI;
 
     if (referenceI == 0 ) {
         sum = 0;
@@ -126,25 +128,14 @@ int applyPI(int referenceI,int actualI, int &sum, int &lastError, int &lastOutpu
         sum += ((currentError * PIGAIN1 - lastError * PIGAIN2)>>13)-(((sum-lastOutput) * PI_ANTIWINDUP)>>15);
     }
     
-	lastOutput = sum;
-	
-	if (lastOutput > 255) {
-	    lastOutput = 255;
+	if (sum > 255) {
 	    sum = 255;
 	}
-	else if (lastOutput < -255) {
-	    lastOutput = -255;
+	else if (sum < -255) {
 	    sum = -255;
 	}
-	
-    /*//check the values from ADC and limit current if necessary
-    #ifdef CLOSED_LOOP_CHOPPING
-        for (int j = 0; j < 2; j++) {
-            if (actualI[j] >= iMaxADC)
-                lastOutput =                 
-    #endif*/
     
-    
+	lastOutput = sum;
     lastError = currentError;
 
 	return lastOutput;
@@ -153,130 +144,125 @@ int applyPI(int referenceI,int actualI, int &sum, int &lastError, int &lastOutpu
 /*
 * Given PIOutput from the PI controller ( two values, one for each winding)
 * transform into output duty cycles for each high side MOSFET (4)
-* winding 0 on A, 2A ; winding 1 on B, C
 * 
+* winding 0 on motor port 1 phase A, motor port 2 phase A
+* winding 1 on motor port 1 phase B, motor port 1 phase C
+*
 * duty consists of high ports x 4 followed by low ports x 4
 */
-void setWindingPWM(int PIOutput[], enum decay decayMode[],  chanend c_pwm) {
+void setWindingPWM(const int refCurrentADC[], const int PIOutput[], const enum decay decayMode[],  chanend c_pwm) {
 
     
     //Winding 0
     if (refCurrentADC[0] > 0) {
-        if (PIOutput[0] < 0)
-            PIOutput[0] = 0;
+    	int pi = (PIOutput[0] < 0) ? 0 : PIOutput[0];
+
         if (decayMode[0] == slow) {
-            duty[4] = 255;
-            duty[5] = 0;
+            duty[M1_LO_A] = 255;
+            duty[M2_LO_A] = 0;
         }
         else if (decayMode[0] == fast) {
-            duty[4] = PIOutput[0];
-            duty[5] = 0;
+            duty[M1_LO_A] = pi;
+            duty[M2_LO_A] = 0;
         }
-        duty[0] = 0;
-        duty[1] = PIOutput[0];
+        duty[M1_HI_A] = 0;
+        duty[M2_HI_A] = pi;
     }
     else if (refCurrentADC[0] < 0) {
-        if (PIOutput[0] > 0)
-            PIOutput[0] = 0;
-            
+    	int pi = (PIOutput[0] > 0) ? 0 : -PIOutput[0];
+
         if (decayMode[0] == slow) {
-            duty[4] = 0;
-            duty[5] = 255;
+            duty[M1_LO_A] = 0;
+            duty[M2_LO_A] = 255;
         }
         else if (decayMode[0] == fast) {
-            duty[4] = 0;
-            duty[5] = -PIOutput[0];
+            duty[M1_LO_A] = 0;
+            duty[M2_LO_A] = pi;
         }
-        duty[1] = 0;
-        duty[0] = -PIOutput[0];
+        duty[M2_HI_A] = 0;
+        duty[M1_HI_A] = pi;
     }
     else {
-        duty[4] = 255;
-        duty[5] = 255;
+        duty[M1_LO_A] = 255;
+        duty[M2_LO_A] = 255;
          
-        duty[1] = 0;
-        duty[0] = 0;
+        duty[M2_HI_A] = 0;
+        duty[M1_HI_A] = 0;
     }
     
     //Winding 1
     if (refCurrentADC[1] >0) {
-        if (PIOutput[1] < 0)
-            PIOutput[1] = 0;
+    	int pi = (PIOutput[1] < 0) ? 0 : PIOutput[1];
+
         if (decayMode[1] == slow) {
-            duty[6] = 255;
-            duty[7] = 0;
+            duty[M1_LO_B] = 255;
+            duty[M2_LO_B] = 0;
         }
         else if (decayMode[1] == fast) {
-            duty[6] = PIOutput[1];
-            duty[7] = 0;
+            duty[M1_LO_B] = pi;
+            duty[M2_LO_B] = 0;
         } 
-        duty[2] = 0;
-        duty[3] = PIOutput[1];
+        duty[M1_HI_B] = 0;
+        duty[M1_HI_C] = pi;
     }
     else if (refCurrentADC[1] < 0) {
-        if (PIOutput[1] > 0)
-            PIOutput[1] = 0;
+    	int pi = (PIOutput[1] > 0) ? 0 : -PIOutput[1];
+
         if (decayMode[1] == slow) {
-            duty[6] = 0;
-            duty[7] = 255;
+            duty[M1_LO_B] = 0;
+            duty[M2_LO_B] = 255;
         }
         else if (decayMode[1] == fast) {
-            duty[6] = 0;
-            duty[7] = -PIOutput[1];
+            duty[M1_LO_B] = 0;
+            duty[M2_LO_B] = pi;
         }
-        duty[2] = -PIOutput[1];
-        duty[3] = 0;
+        duty[M1_HI_B] = pi;
+        duty[M1_HI_C] = 0;
     }
     else {
-        duty[6] = 255;
-        duty[7] = 255;
+        duty[M1_LO_B] = 255;
+        duty[M2_LO_B] = 255;
        
-        duty[2] = 0;
-        duty[3] = 0;
+        duty[M1_HI_B] = 0;
+        duty[M1_HI_C] = 0;
     }
 
     pwmSingleBitPortSetDutyCycle(c_pwm, duty, 8);
-
-    
 }
 
-void getWindingADC ( streaming chanend c_adc) {
-    int adc[4] = {200,200,200,200};
-    //int temp;
-    
-    //Get the adc values
-//    c_adc <: 6;
-//    slave {
-//        c_adc :> adc[0];
-//        c_adc :> adc[1];
-//        c_adc :> adc[2];
-//        c_adc :> adc[3];
-//        c_adc :> temp;
-//        c_adc :> temp;
-//    }
-    
-    //make sure we only use the positive part
-    for (int i = 0; i < 4; i++)
-        if (adc[i] < 0)
-            adc[i] = 0;
-    
-    //If low[0] is on and the reference != 0 use adc[0] otherwise use negative of adc[3]
-    if (duty[4] != 0 && refCurrentADC[0] != 0)
-        windingCurrent[0] = adc[0];
-    else
-        windingCurrent[0] = -adc[3];
 
-    //If low[2] on and reference != 0 use adc[1] else negative adc[2]
-    if (duty[6] != 0 && refCurrentADC[1] != 0)
-        windingCurrent[1] = adc[1];
-    else 
-        windingCurrent[1] = -adc[2];
 
-    #ifdef USE_XSCOPE    
-        xscope_probe_data(2, windingCurrent[0]);
-        xscope_probe_data(3, windingCurrent[1]);
-    #endif
-        
+/*
+ * Ideally we would measure the coil currents using the ADC here.
+ *
+ * The ADC on the XMOS motor development board has six channels, grouped
+ * as three pairs.  Each pair can be simultaneously samples by the dual
+ * ADC.
+ *
+ * In a stepper motor scenario, a dual ADC is required to be able to sample
+ * the coil currents in the two coils.  There are four coils current states
+ * with respect to the 4 H-bridges that feed the two coils. These are:
+ *
+ *   coil1 A1H -> A2L, coil2 B1H -> B2L
+ *   coil1 A1H -> A2L, coil2 B1L <- B2H
+ *   coil1 A1L <- A2H, coil2 B1H -> B2L
+ *   coil1 A1L <- A2H, coil2 B1L <- B2H
+ *
+ * Since we can only measure two of the low sides of the bridges at the same
+ * time, we cannot arrange for the dual ADC to measure the two coil currents
+ * without sampling each of the 4 low side half bridges.
+ *
+ * If the ADC sense resistors were measuring the current through both of the
+ * low side bridges for each coil then we could do a simple ADC measurement.
+ *
+ */
+{int, int } getWindingADC ( streaming chanend c_adc) {
+
+	int windingCurrent[2] = {200,200};
+
+	// We do not perform ADC measurements, and consequently do not do torque
+	// control.
+    return { windingCurrent[0], windingCurrent[1] };
 }
 
 /*
@@ -287,10 +273,16 @@ void getWindingADC ( streaming chanend c_adc) {
 ** 0	0	0	255
 */    
 
-void singleStep(chanend c_pwm, unsigned int &step, unsigned microPeriod, streaming chanend c_adc) {
+void singleStep(chanend c_pwm, unsigned int &step, unsigned direction, unsigned microPeriod, streaming chanend c_adc) {
 
     int currentReference[2];
+
+    timer microstepTimer, adc_timer;
+    int microstepTime, adc_time;
     
+    microstepTimer :> microstepTime;
+    adc_timer :> adc_time;
+
     //If we've reached the end of a sine wave then reset the step count
     if (step > COS_SIZE*4) {
         finalStep = COS_SIZE;
@@ -302,9 +294,10 @@ void singleStep(chanend c_pwm, unsigned int &step, unsigned microPeriod, streami
 
     while (step <= finalStep) {
         select {
-            
-            case microstepTimer when timerafter (microstepTime+microPeriod) :> microstepTime:
-              
+            case microstepTimer when timerafter(microstepTime+microPeriod) :> void:
+
+            	microstepTime += microPeriod;
+
                 //0 - 90 degrees
                 //winding 0  : -1 => 0  --  I Falling
                 //winding 1  :  0 => 1  --  I Rising
@@ -364,84 +357,50 @@ void singleStep(chanend c_pwm, unsigned int &step, unsigned microPeriod, streami
                 
                 //If direction is reverse then switch the coils for the current reference
                 if (direction) {
-                    temp1 = currentReference[0];
+                    int temp1 = currentReference[0];
                     currentReference[0] = currentReference[1];
                     currentReference[1] = temp1;
                 }
 
                 #ifdef OPEN_LOOP_CHOPPING
                     for (int j = 0; j < 2; j++) {
-                        if (currentReference[j] > choppedDutyCycle)
-                            currentReference[j] = choppedDutyCycle;
-                        else if (currentReference[j] < -choppedDutyCycle)
-                            currentReference[j] = -choppedDutyCycle;
+                        if (currentReference[j] > OPEN_LOOP_CHOPPED_DUTY_CYCLE)
+                            currentReference[j] = OPEN_LOOP_CHOPPED_DUTY_CYCLE;
+                        else if (currentReference[j] < -OPEN_LOOP_CHOPPED_DUTY_CYCLE)
+                            currentReference[j] = -OPEN_LOOP_CHOPPED_DUTY_CYCLE;
                     }
                 #endif
                 
-                #ifdef CLOSED_LOOP_CHOPPING
-                    for (int j = 0; j < 2; j++) {
-                        //Check if currentReference has dropped below the limiting value and reset the limit flag if so
-                        if (((limitFlag[j] > 0) && (currentReference[j] < limitFlag[j])) || ((limitFlag[j] < 0) && (currentReference[j] > limitFlag[j]))) {
-                            limitFlag[j] = 0;
-                        }
-                        //otherwise keep the reference current at the limit
-                        if (limitFlag[j] != 0) {
-                            currentReference[j] = limitFlag[j];
-                        }
-                    }
-                #endif
-                
-                //Convert the currentReference to a scaled value on the same scale as the ADC
-                //Winding 0
-                if (currentReference[0] < 0)
-                    refCurrentADC[0] = -((-currentReference[0] * iScaled) >> 8);
-                else if (currentReference[0] == 0)
-                    refCurrentADC[0] = 0;
-                else
-                    refCurrentADC[0] = (currentReference[0] * iScaled) >> 8;
-                //Winding 1    
-                if (currentReference[1] < 0)
-                    refCurrentADC[1] = -((-currentReference[1] * iScaled) >> 8);
-                else if (currentReference[1] == 0)
-                    refCurrentADC[1] = 0;
-                else
-                    refCurrentADC[1] = ((currentReference[1] * iScaled) >> 8);
-                
-                //Store the last reference current so that we can revert to it if chopping closed loop
-                #ifdef CLOSED_LOOP_CHOPPING
-                    lastRefCurrent[0] = currentReference[0];
-                    lastRefCurrent[1] = currentReference[1];  
-                #endif
+				refCurrentADC[0] = currentReference[0];
+				refCurrentADC[1] = currentReference[1];
                 
                 step += STEP_SIZE; 
                 break;    
                 
             //Take the ADC values, apply the PI controller and set the pwm accordingly    
             case adc_timer when timerafter(adc_time) :> void:
-                getWindingADC(c_adc);
-                
-                #ifdef CLOSED_LOOP_CHOPPING
-                    for (int j = 0; j < 2; j++) {
-                        if (((windingCurrent[j] >= iMaxADC) || (windingCurrent[j] <= -iMaxADC)) && (limitFlag[j] == 0))
-                            limitFlag[j] = lastRefCurrent[j];
-                    }
-                #endif
+				{
+					int PIOutput[2] = {0,0};
 
-                PIOutput[0] = applyPI(refCurrentADC[0], windingCurrent[0], PISum0, PILastError0, output1 );
-                PIOutput[1] = applyPI(refCurrentADC[1], windingCurrent[1], PISum1, PILastError1, output2 );
-                
-                #ifdef USE_XSCOPE
-                    xscope_probe_data(0,refCurrentADC[0]);
-                    xscope_probe_data(1,refCurrentADC[1]); 
+					//int current[2];
+					//{ current[0], current[1] } = getWindingADC(c_adc);
+					//PIOutput[0] = applyPI(refCurrentADC[0], current[0], PISum0, PILastError0, output1 );
+					//PIOutput[1] = applyPI(refCurrentADC[1], current[1], PISum1, PILastError1, output2 );
 
-                    xscope_probe_data(4,PIOutput[0]);
-                    xscope_probe_data(5,PIOutput[1]);
-                #endif
-                
-                setWindingPWM(PIOutput, decayMode, c_pwm);
+					// We do not do torque control because of the complexity of the dual channel ADC and MUX
+					// on the motor control board
+					PIOutput[0] = refCurrentADC[0];
+					PIOutput[1] = refCurrentADC[1];
 
-                
-                adc_time += ADC_PERIOD;
+					setWindingPWM(refCurrentADC, PIOutput, decayMode, c_pwm);
+#ifdef USE_XSCOPE
+					xscope_probe_data(0,refCurrentADC[0]);
+					xscope_probe_data(1,refCurrentADC[1]);
+					xscope_probe_data(4,PIOutput[0]);
+					xscope_probe_data(5,PIOutput[1]);
+#endif
+	                adc_time += ADC_PERIOD;
+                }
                 break;
          }
     }
@@ -449,15 +408,21 @@ void singleStep(chanend c_pwm, unsigned int &step, unsigned microPeriod, streami
 
 
 void motor(chanend c_pwm, chanend c_control, chanend c_wd, streaming chanend c_adc) {
-    unsigned int step = 0, noSteps = 0, stepCounter = 0, stepPeriod = 5000000, doSteps = 0, doSpeed = 1;
-    int tempRef[2];
-    enum decay tempDecay[2];
+	// The duration of the step period determines the RPM
+	unsigned int stepPeriod = 5000000;
+
+    unsigned int step = 0, noSteps = 0, stepCounter = 0;
+
+    unsigned  doSteps = 0, doSpeed = 1;
+
+    int direction = FORWARD;
+
     int cmd;
 	timer speed_demo_timer, t;
     int time, speed_demo_time;
     int microStepPeriod;
     
-    #ifdef USE_XSCOPE
+#ifdef USE_XSCOPE
     xscope_config_io(XSCOPE_IO_BASIC);
     xscope_register(8,
     XSCOPE_CONTINUOUS, "ADCReference 1", XSCOPE_UINT, "Value",
@@ -468,20 +433,18 @@ void motor(chanend c_pwm, chanend c_control, chanend c_wd, streaming chanend c_a
     XSCOPE_CONTINUOUS, "PI Output2", XSCOPE_UINT, "Value",
     XSCOPE_CONTINUOUS, "lastRef0", XSCOPE_UINT, "Value",
     XSCOPE_CONTINUOUS, "lastRef1", XSCOPE_UINT, "Value");
-    #endif
+#endif
     
-    microstepTimer :> microstepTime;
     //delay to make sure the ADC is calibrated before starting output and watchdog is enabled
     t :> time;
-    t when timerafter (time+200000000) :> time;
+    t when timerafter (time+200000000) :> void;
     c_wd <: WD_CMD_START;
-    
-    time += PERIOD;
-    adc_timer :> adc_time;
-    adc_time +=100000;
-    
+
+    printstrln("Starting");
+    t :> time;
+
     speed_demo_timer :> speed_demo_time;
-    microStepPeriod = stepPeriod / ((COS_SIZE) / STEP_SIZE);
+    microStepPeriod = stepPeriod / MICROSTEP_COUNT;
     
     while (1) {
         #pragma ordered
@@ -492,7 +455,7 @@ void motor(chanend c_pwm, chanend c_control, chanend c_wd, streaming chanend c_a
                     doSpeed = 1;
                     c_control :> stepPeriod;
                     c_control :> direction; 
-                    microStepPeriod = stepPeriod / ((COS_SIZE) / STEP_SIZE);
+                    microStepPeriod = stepPeriod / MICROSTEP_COUNT;
                 }
                 if (cmd == CMD_NUMBER_STEPS) {
                     doSpeed = 0;
@@ -500,9 +463,13 @@ void motor(chanend c_pwm, chanend c_control, chanend c_wd, streaming chanend c_a
                     c_control :> stepPeriod;
                     c_control :> noSteps;
                     c_control :> direction;
-                    microStepPeriod = stepPeriod / ((COS_SIZE) / STEP_SIZE);
+                    microStepPeriod = stepPeriod / MICROSTEP_COUNT;
                 }
                 if (cmd == CMD_MOTOR_OFF) {
+                    enum decay tempDecay[2] = { slow, slow };
+                    int tempRef[2] = { 0, 0 };
+                    int tempAdc[2] = { 0, 0 };
+
                     //reset step count so we don't startup in the middle of a step
                     step = 0;
                     startupFlag = 1;
@@ -510,21 +477,16 @@ void motor(chanend c_pwm, chanend c_control, chanend c_wd, streaming chanend c_a
                     //stop controller making any more steps
                     doSteps = 0;
                     doSpeed = 0;
-                    
-                    //TODO setup vars on init
-                    for (int i = 0; i < 2; i++) {
-                        tempRef[i] = 0;
-                        tempDecay[i] = slow;
-                    }
-                    setWindingPWM(tempRef, tempDecay, c_pwm);
+
+                    setWindingPWM(tempAdc, tempRef, tempDecay, c_pwm);
                 }
                 break;
                     
             //loop for speed
-            case t when timerafter (time) :> void:
+            case t when timerafter(time) :> void:
                 
                 if (doSpeed) {
-                    singleStep(c_pwm, step, microStepPeriod, c_adc);
+                    singleStep(c_pwm, step, direction, microStepPeriod, c_adc);
                 }
                 else if (doSteps) {
                     if (stepCounter == noSteps) {
@@ -532,7 +494,7 @@ void motor(chanend c_pwm, chanend c_control, chanend c_wd, streaming chanend c_a
                         stepCounter = 0;
                     }
                     else {
-                        singleStep(c_pwm, step, microStepPeriod, c_adc);
+                        singleStep(c_pwm, step, direction, microStepPeriod, c_adc);
                         stepCounter++;
                     }
                 }

@@ -11,7 +11,7 @@ Physical connections
 --------------------
 
 A stepper motor has two independent coils.  Consequently, it requires 4 half-bridges.  The software is configured
-to have the first coil attached to motor 1 ports A and B, and the second coil on motor 1 port C and motor 2 port A.
+to have the first coil attached to motor 1 port A and motor 2 port A, and the second coil on motor 1 port B and motor 2 port B.
 
 The stepper motor used during development of the algorithm is from Astrosyn, and is a 12V unit.
 
