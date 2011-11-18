@@ -1,8 +1,13 @@
 Stepper motor
 +++++++++++++
 
-A stepper motor has a pair of coils. The controller can move the spindle a very precise angle by puttint current
-in each coil alternately.
+A stepper motor has a pair of coils. The controller can move the spindle a very precise angle by putting current
+in each coil alternately.  To commutate the rotor, the following pattern can be used.
+
+  * Coil A, current +
+  * Coil B, current +
+  * Coil A, current -
+  * Coil B, current -
 
 The XMOS implementation supports micro-stepping, where the current in each coil is controlled propertionally, to
 introduce angular steps of a fraction of the coil angle.
@@ -42,6 +47,13 @@ Main control loop
 The main control loop has a period of 20 Hz.  There are two states which it can be in, speed control or step
 counting.  The *doSpeed* and *doSteps* variables control which mode is current active.
 
+Running outside of the *singleStep* function is the main *motor* control loop.  If it is running in speed control mode,
+an outer timer is used to call the singleStep at regular intervals to rotate the rotor at the correct speed.  This loop
+also contains channel communication endpoints for receiving control commands for an external control thread.
+
+Single step control function
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 The function *singleStep* moves the spindle by a single position.  It has arguments that are channel links to
 the PWM and ADC modules, a microstepping period, and a step position.
 
@@ -55,9 +67,26 @@ During the *singleStep* function, a timer provides control for the stepping oper
 currents for the specific microstep.  A second timer, running faster, uses the ADC to measure the actual coil currents
 and uses a PI controller to adjust the PWMs to produce the correct current.  This fast inner timer is a torque controller.
 
-Running outside of the singleStep* function is the main *motor* control loop.  If it is running in speed control mode,
-an outer timer is used to call the singleStep at regular intervals to rotate the rotor at the correct speed.  This loop
-also contains channel communication endpoints for receiving control commands for an external control thread.
+The diagram shows an XSCOPE trace of the reference currents for the two coils. The number of microsteps is set to 16, which can be
+seen by examining each signal and noticing that in each quarter phase there are 16 steps.
+
+  .. image:: StepperCurrents.png
+     :width: 100%
+
+ADC configuration
+-----------------
+
+In the default version of the code, the ADC query function is set up to return a pair of hard coded values
+for the measured currents, and the PI controllers are disabled.
+
+The *XP-MC-LVM2* board has a dual ADC with a multiplexor
+that allows the selection of the sampled channels.  Since there are two coils, a dual ADC will be able to sample the
+two currents without the aid of the multiplexor.  However, since the board is also designed to perform sampling for a
+complex FOC, the ADC channels measure the current in each half-bridge, rather than in either of the pair of half-bridges
+which control each coil.
+
+Instead of making the stepper motor code more complex by performing a pair of samples, the code
+is left simple, but without torque control.
 
  
 
